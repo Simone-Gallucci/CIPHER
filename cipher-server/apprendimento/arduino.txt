@@ -1,0 +1,461 @@
+# Arduino – Guida Completa e Moduli
+
+---
+
+## Cos'è Arduino
+
+Arduino è una piattaforma open-source per prototipazione elettronica, composta da hardware (microcontrollori) e software (IDE). Creata nel 2005 da Massimo Banzi e colleghi al IDII di Ivrea (Italia). È la piattaforma più diffusa al mondo per l'elettronica hobbistica, educativa e professionale. Programmatoin C/C++.
+
+---
+
+## Differenza Arduino vs Raspberry Pi
+
+| Aspetto          | Arduino                    | Raspberry Pi               |
+|------------------|----------------------------|----------------------------|
+| Tipo             | Microcontrollore           | Single-Board Computer      |
+| OS               | No (bare metal)            | Linux                      |
+| Linguaggio       | C/C++ (subset)             | Python, C, molti altri     |
+| GPIO             | 5V (tollerante)            | 3.3V (sensibile)           |
+| ADC              | Sì (integrato)             | No (solo digitale)         |
+| Real-time        | Sì (deterministico)        | No (OS introduce latenza)  |
+| Consumo          | Molto basso (mA)           | Alto (centinaia mA)        |
+| Avvio            | Istantaneo                 | 30-60 secondi              |
+| Uso tipico       | Controllo hardware         | Elaborazione, networking   |
+
+---
+
+## Modelli Arduino
+
+### Arduino Uno (R3)
+- MCU: ATmega328P 16MHz
+- Flash: 32KB, SRAM: 2KB, EEPROM: 1KB
+- Digital I/O: 14 (6 PWM)
+- Analog Input: 6
+- Alimentazione: USB o 7-12V jack
+- Il modello più usato per imparare
+
+### Arduino Uno R4
+- **Minima**: MCU Renesas RA4M1 48MHz, più potente
+- **WiFi**: + modulo ESP32-S3 per WiFi/BT + LED matrix 12x8
+
+### Arduino Mega 2560
+- MCU: ATmega2560 16MHz
+- Flash: 256KB, SRAM: 8KB
+- Digital I/O: 54 (15 PWM)
+- Analog Input: 16
+- Più pin e memoria per progetti complessi
+
+### Arduino Nano
+- Stesso MCU dell'Uno (ATmega328P)
+- Formato mini, per breadboard
+- Varianti: Nano Every (ATmega4809), Nano 33 IoT (WiFi/BT)
+
+### Arduino Nano 33 BLE / BLE Sense
+- MCU: nRF52840 64MHz
+- BLE integrato
+- **BLE Sense**: + IMU, microfono, sensori ambientali, gesture
+- Usato per TinyML (machine learning su microcontrollori)
+
+### Arduino Leonardo
+- MCU: ATmega32U4
+- USB nativo: può emulare tastiera/mouse (HID)
+
+### Arduino Micro
+- Come Leonardo in formato ridotto
+
+### Arduino Due
+- MCU: AT91SAM3X8E ARM Cortex-M3 84MHz
+- Flash: 512KB, SRAM: 96KB
+- 3.3V logica (attenzione!)
+- Molto più potente degli AVR
+
+### Arduino MKR Series
+- Famiglia per IoT, tutti a 3.3V
+- **MKR WiFi 1010**: WiFi + BT (ESP32)
+- **MKR NB 1500**: NB-IoT / LTE-M
+- **MKR GSM 1400**: GSM/3G
+- **MKR WAN 1300**: LoRa
+- **MKR Zero**: SD card + I²S audio
+
+### Arduino Portenta H7
+- MCU: STM32H747 dual-core Cortex-M7 + M4 480MHz
+- Per applicazioni industriali/professionali
+- Supporta MicroPython, OpenMV
+
+### Arduino Giga R1 WiFi
+- MCU: STM32H747 (come Portenta)
+- Grande formato (come Mega)
+- WiFi/BT, display connector, microfono
+
+---
+
+## IDE e Programmazione
+
+### Arduino IDE 2
+Software ufficiale gratuito per Windows, macOS, Linux.
+- Editor con autocompletamento
+- Serial Monitor e Plotter integrati
+- Librerie manager integrato
+- Debugger (per schede supportate)
+
+### PlatformIO
+IDE avanzato (plugin VS Code).
+- Supporta centinaia di piattaforme
+- Build system potente
+- Test unitari
+
+### Struttura sketch base
+```cpp
+// Variabili globali
+int ledPin = 13;
+
+void setup() {
+    // Eseguito una volta all'avvio
+    pinMode(ledPin, OUTPUT);
+    Serial.begin(9600);
+    Serial.println("Arduino avviato!");
+}
+
+void loop() {
+    // Eseguito in loop continuo
+    digitalWrite(ledPin, HIGH);
+    delay(1000);
+    digitalWrite(ledPin, LOW);
+    delay(1000);
+}
+```
+
+---
+
+## Funzioni fondamentali
+
+### GPIO digitale
+```cpp
+pinMode(pin, OUTPUT);           // configura come output
+pinMode(pin, INPUT);            // input senza pull
+pinMode(pin, INPUT_PULLUP);     // input con pull-up interno
+
+digitalWrite(pin, HIGH);        // metti a 5V
+digitalWrite(pin, LOW);         // metti a 0V
+int val = digitalRead(pin);     // leggi 0 o 1
+```
+
+### PWM (analogico simulato)
+```cpp
+// Solo pin PWM (3,5,6,9,10,11 su Uno)
+analogWrite(pin, valore);       // 0-255 (0-100% duty cycle)
+// 0 = 0%, 127 = 50%, 255 = 100%
+```
+
+### ADC (lettura analogica)
+```cpp
+int val = analogRead(A0);       // 0-1023 (10-bit, 0-5V)
+float tensione = val * (5.0 / 1023.0);
+```
+
+### Tempo
+```cpp
+delay(1000);                    // aspetta 1000ms (blocca tutto)
+delayMicroseconds(100);         // aspetta 100µs
+unsigned long t = millis();     // ms dall'avvio
+unsigned long t = micros();     // µs dall'avvio
+```
+
+### Seriale
+```cpp
+Serial.begin(9600);
+Serial.print("Valore: ");
+Serial.println(valore);
+Serial.print(valore, DEC);      // decimale
+Serial.print(valore, HEX);      // esadecimale
+Serial.print(valore, BIN);      // binario
+Serial.available();             // bytes disponibili
+char c = Serial.read();
+String s = Serial.readString();
+```
+
+### EEPROM
+```cpp
+#include <EEPROM.h>
+EEPROM.write(indirizzo, valore);    // 0-255
+int val = EEPROM.read(indirizzo);
+EEPROM.put(indirizzo, variabile);   // qualsiasi tipo
+EEPROM.get(indirizzo, variabile);
+```
+
+---
+
+## Comunicazione
+
+### I²C (Wire)
+```cpp
+#include <Wire.h>
+
+Wire.begin();                           // master
+Wire.beginTransmission(0x48);          // indirizzo slave
+Wire.write(0x00);                       // registro
+Wire.endTransmission();
+
+Wire.requestFrom(0x48, 2);             // richiedi 2 byte
+while (Wire.available()) {
+    byte b = Wire.read();
+}
+```
+
+### SPI
+```cpp
+#include <SPI.h>
+
+SPI.begin();
+digitalWrite(SS, LOW);
+byte response = SPI.transfer(0x01);
+digitalWrite(SS, HIGH);
+```
+
+### SoftwareSerial (UART aggiuntivo)
+```cpp
+#include <SoftwareSerial.h>
+SoftwareSerial mySerial(10, 11);    // RX, TX
+mySerial.begin(9600);
+mySerial.println("Ciao");
+```
+
+---
+
+## Librerie popolari
+
+### Sensori
+```cpp
+#include <DHT.h>                // DHT11/DHT22
+#include <Adafruit_BMP085.h>   // BMP180
+#include <Adafruit_BMP280.h>   // BMP280
+#include <OneWire.h>           // protocollo 1-Wire
+#include <DallasTemperature.h> // DS18B20
+#include <MPU6050.h>           // accelerometro/giroscopio
+#include <NewPing.h>           // HC-SR04 ultrasuoni
+```
+
+### Display
+```cpp
+#include <LiquidCrystal.h>     // LCD parallelo
+#include <LiquidCrystal_I2C.h> // LCD I²C
+#include <Adafruit_SSD1306.h>  // OLED SSD1306
+#include <Adafruit_GFX.h>      // grafica base
+#include <TFT_eSPI.h>          // display TFT
+#include <U8g2lib.h>           // molti display
+```
+
+### Comunicazione
+```cpp
+#include <SPI.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include <WiFi.h>              // ESP32/MKR
+#include <WiFiNINA.h>          // Nano 33 IoT
+#include <ESP8266WiFi.h>       // ESP8266
+#include <PubSubClient.h>      // MQTT
+#include <ArduinoJson.h>       // JSON
+```
+
+### Motori
+```cpp
+#include <Servo.h>             // servo motori
+#include <Stepper.h>           // stepper base
+#include <AccelStepper.h>      // stepper avanzato
+#include <AFMotor.h>           // Adafruit Motor Shield
+```
+
+### Storage
+```cpp
+#include <SD.h>                // SD card
+#include <EEPROM.h>            // memoria interna
+```
+
+### Altro
+```cpp
+#include <IRremote.h>          // infrarossi
+#include <RFID.h>              // RFID MFRC522
+#include <Keypad.h>            // tastiera a matrice
+#include <Encoder.h>           // encoder rotativo
+#include <FastLED.h>           // LED WS2812B/NeoPixel
+#include <Adafruit_NeoPixel.h> // NeoPixel
+#include <RTClib.h>            // RTC DS1307/DS3231
+#include <Tone.h>              // audio
+```
+
+---
+
+## Shield (espansioni)
+
+### Ethernet Shield (W5100/W5500)
+- Aggiunge connettività Ethernet
+- Stack TCP/IP hardware
+- Include slot SD card
+
+### WiFi Shield
+- ESP8266 o ESP32 come coprocessore WiFi
+- Comunicazione via UART con comandi AT
+
+### Motor Shield (L293D / L298N)
+- **Adafruit Motor Shield V2**: 4 motori DC o 2 stepper
+- Usa I²C (PCA9685 per PWM)
+- **L298N Module**: 2 motori DC, driver H-bridge
+
+### Relay Shield
+- 2, 4 o 8 relè
+- Controllo carichi AC (luci, motori, elettrodomestici)
+- Isolamento ottico
+
+### Sensor Shield
+- Aggiunge pin con GND, VCC e segnale per ogni GPIO
+- Facilita collegamento sensori senza breadboard
+
+### SD Card Shield
+- Slot SD per storage
+- Interfaccia SPI
+
+### GSM/GPRS Shield (SIM900/SIM800)
+- Connettività cellulare 2G/3G
+- SMS, chiamate, dati
+- Antenna esterna
+
+### GPS Shield
+- Modulo GPS integrato (NEO-6M)
+- UART per dati NMEA
+
+### Bluetooth Shield (HC-05)
+- Bluetooth seriale 2.1
+- Comunicazione con smartphone
+
+### Prototyping Shield
+- Area breadboard piccola sopra Arduino
+- Perfetta per prototipi compatti
+
+### Joystick Shield
+- Joystick analogico + bottoni
+- Per controller e giochi
+
+### OLED Shield (Wemos D1)
+- Display OLED integrato
+- Per Wemos D1 Mini (ESP8266)
+
+---
+
+## Moduli standalone comuni
+
+### Comunicazione wireless
+- **HC-05 / HC-06**: Bluetooth seriale
+- **NRF24L01**: radio 2.4GHz, punto-punto o mesh
+- **ESP8266 (ESP-01)**: WiFi con comandi AT via UART
+- **ESP32**: WiFi+BT come modulo esterno
+- **LoRa SX1276/SX1278**: comunicazione long range (km)
+- **SIM800L**: GSM/GPRS/SMS
+- **433MHz / 315MHz**: radio economica monodirezionale
+
+### Sensori
+- **DHT11**: temperatura + umidità (economico, meno preciso)
+- **DHT22**: temperatura + umidità (più preciso)
+- **BMP180 / BMP280**: pressione + temperatura (I²C)
+- **DS18B20**: temperatura waterproof (1-Wire)
+- **HC-SR04**: distanza a ultrasuoni
+- **PIR HC-SR501**: rilevatore movimento infrarosso
+- **MQ-2**: gas / fumo
+- **MQ-7**: monossido di carbonio
+- **MFRC522**: lettore RFID 13.56MHz
+- **PN532**: NFC/RFID avanzato
+- **MPU-6050**: accelerometro + giroscopio 6-assi (I²C)
+- **HMC5883L / QMC5883**: magnetometro 3-assi (I²C)
+- **INA219**: misura corrente/tensione (I²C)
+- **ACS712**: sensore corrente AC/DC
+- **LDR**: fotoresistore
+- **TCS3200 / TCS34725**: sensore colore
+- **MAX30100 / MAX30102**: ossimetro + battito cardiaco
+- **MLX90614**: temperatura infrarosso (contactless)
+
+### Display e output
+- **LCD 16x2 / 20x4**: alfanumerico con HD44780
+- **I²C LCD adapter (PCF8574)**: riduce pin da 6 a 2
+- **OLED 0.96" SSD1306**: 128x64 I²C
+- **OLED 1.3" SH1106**: 128x64 I²C
+- **TFT 1.8" ST7735**: 128x160 colori SPI
+- **TFT 2.4" ILI9341**: 320x240 colori SPI con touch
+- **E-Ink 2.9"**: display a basso consumo
+- **MAX7219**: driver 8 cifre 7-segmenti o matrice 8x8
+- **WS2812B (NeoPixel)**: LED RGB indirizzabili
+- **TM1637**: display 4 cifre 7-segmenti
+
+### Motori e attuatori
+- **L298N**: driver 2 motori DC / 1 stepper
+- **L293D**: driver 2 motori DC (meno potente)
+- **A4988**: driver stepper con microstepping
+- **DRV8825**: driver stepper più preciso di A4988
+- **TB6600**: driver stepper industriale
+- **PCA9685**: 16 canali PWM via I²C (servo/LED)
+- **Servo SG90**: servo 9g mini
+- **Servo MG996R**: servo metallico ad alto torque
+- **28BYJ-48 + ULN2003**: stepper economico
+- **Relè 5V**: controllo carichi AC/DC
+
+### Storage e RTC
+- **Modulo SD SPI**: storage su SD card
+- **DS1307**: RTC I²C con batteria
+- **DS3231**: RTC I²C molto preciso (con temp. sensor)
+- **AT24C256**: EEPROM I²C 256KB
+
+### Audio
+- **Buzzer attivo**: tono fisso con segnale digitale
+- **Buzzer passivo**: frequenza variabile con PWM
+- **DFPlayer Mini**: lettore MP3 da SD card via UART
+- **VS1053**: codec audio SPI (MP3, OGG, WAV, MIDI)
+
+### Alimentazione
+- **Step-down (buck) MP1584**: input 4-28V, output regolabile
+- **Step-up (boost) MT3608**: input 2-24V, output regolabile
+- **TP4056**: caricabatterie LiPo con protezione
+- **18650 Battery Shield**: power bank per Arduino/ESP
+
+---
+
+## Ecosistema ESP8266 / ESP32
+
+Molto usati con o al posto di Arduino per progetti IoT.
+
+### ESP8266 (NodeMCU / Wemos D1 Mini)
+- WiFi 802.11 b/g/n integrato
+- CPU: Tensilica L106 80/160MHz
+- Flash: 1-4MB
+- GPIO: 11 (molti con funzioni multiple)
+- ADC: 1 (0-1V, non 0-5V!)
+- Programmabile con Arduino IDE
+
+### ESP32 / ESP32-S2 / ESP32-S3 / ESP32-C3
+- WiFi + Bluetooth integrati
+- CPU: dual-core Xtensa LX6 240MHz (ESP32 classico)
+- ADC: 18 canali 12-bit
+- DAC: 2 canali 8-bit
+- Touch: 10 pin capacitivi
+- Hall sensor, temperatura interna
+- Ultra low power modes
+- Supporta Arduino IDE, MicroPython, ESP-IDF
+
+```cpp
+// ESP32 con Arduino IDE
+#include <WiFi.h>
+WiFi.begin("SSID", "password");
+while (WiFi.status() != WL_CONNECTED) delay(500);
+Serial.println(WiFi.localIP());
+```
+
+---
+
+## Best practices Arduino
+
+- Usare `millis()` invece di `delay()` per multitasking
+- Non usare `String` (frammentazione heap) — usare char array
+- Controllare sempre la tensione logica dei moduli (3.3V vs 5V)
+- Aggiungere condensatori di bypass (100nF) vicino ai IC
+- Usare resistori pull-up/pull-down sui pin floating
+- Calibrare i sensori analogici
+- Proteggere i pin da sovratensioni con resistori serie
+- Usare `const` e `constexpr` invece di `#define` dove possibile
+- Commentare il codice con unità di misura e pin usati

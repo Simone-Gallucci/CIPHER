@@ -1,0 +1,236 @@
+# Linguaggio C++ – Conoscenza Base
+
+## Introduzione
+C++ è un'estensione di C creata da Bjarne Stroustrup. Aggiunge la programmazione orientata agli oggetti (OOP), i template, la gestione delle eccezioni e la STL. È usato in sistemi embedded, game engine, software ad alte prestazioni.
+
+---
+
+## Struttura base
+
+```cpp
+#include <iostream>
+using namespace std;
+
+int main() {
+    cout << "Hello, World!" << endl;
+    return 0;
+}
+```
+
+---
+
+## Input/Output
+
+```cpp
+int x;
+cin >> x;               // input
+cout << "Valore: " << x << endl;  // output
+cerr << "Errore!" << endl;        // errore
+```
+
+---
+
+## Namespace
+
+```cpp
+using namespace std;    // importa tutto il namespace std
+std::cout << "ciao";   // oppure prefisso esplicito
+```
+
+---
+
+## Classi e Oggetti (OOP)
+
+```cpp
+class Persona {
+private:
+    string nome;
+    int eta;
+
+public:
+    // Costruttore
+    Persona(string n, int e) : nome(n), eta(e) {}
+
+    // Distruttore
+    ~Persona() {}
+
+    // Metodi
+    void stampa() {
+        cout << nome << ", " << eta << " anni" << endl;
+    }
+
+    // Getter/Setter
+    string getNome() { return nome; }
+    void setEta(int e) { eta = e; }
+};
+
+Persona p("Szymon", 20);
+p.stampa();
+```
+
+---
+
+## I 4 pilastri dell'OOP
+
+### Incapsulamento
+Nascondere i dettagli interni usando private/protected/public.
+
+### Ereditarietà
+```cpp
+class Animale {
+public:
+    void respira() { cout << "respiro" << endl; }
+};
+
+class Cane : public Animale {
+public:
+    void abbaia() { cout << "bau!" << endl; }
+};
+
+Cane c;
+c.respira();  // ereditato
+c.abbaia();
+```
+
+### Polimorfismo
+```cpp
+class Forma {
+public:
+    virtual double area() = 0;  // funzione virtuale pura
+};
+
+class Cerchio : public Forma {
+    double r;
+public:
+    Cerchio(double r) : r(r) {}
+    double area() override { return 3.14 * r * r; }
+};
+
+class Rettangolo : public Forma {
+    double l, h;
+public:
+    Rettangolo(double l, double h) : l(l), h(h) {}
+    double area() override { return l * h; }
+};
+```
+
+### Astrazione
+Classi astratte con metodi virtuali puri (= 0).
+
+---
+
+## Template
+
+```cpp
+template <typename T>
+T massimo(T a, T b) {
+    return (a > b) ? a : b;
+}
+
+cout << massimo(3, 7);        // int
+cout << massimo(3.14, 2.71);  // double
+```
+
+---
+
+## STL (Standard Template Library)
+
+### Vector
+```cpp
+#include <vector>
+vector<int> v = {1, 2, 3};
+v.push_back(4);
+v.size();
+v[0] = 10;
+for (int x : v) cout << x << " ";
+```
+
+### Map
+```cpp
+#include <map>
+map<string, int> eta;
+eta["Szymon"] = 20;
+eta["Mario"] = 25;
+cout << eta["Szymon"];
+```
+
+### String
+```cpp
+#include <string>
+string s = "ciao";
+s += " mondo";
+s.length();
+s.substr(0, 4);
+s.find("mondo");
+```
+
+### Algorithm
+```cpp
+#include <algorithm>
+sort(v.begin(), v.end());
+reverse(v.begin(), v.end());
+auto it = find(v.begin(), v.end(), 3);
+```
+
+---
+
+## Gestione delle eccezioni
+
+```cpp
+try {
+    if (x == 0) throw runtime_error("divisione per zero");
+    int r = 10 / x;
+} catch (const runtime_error& e) {
+    cerr << "Errore: " << e.what() << endl;
+} catch (...) {
+    cerr << "Errore sconosciuto" << endl;
+}
+```
+
+---
+
+## Smart Pointers (C++11)
+
+```cpp
+#include <memory>
+
+// unique_ptr: proprietà esclusiva
+unique_ptr<int> p = make_unique<int>(42);
+
+// shared_ptr: proprietà condivisa
+shared_ptr<int> sp = make_shared<int>(10);
+
+// weak_ptr: riferimento debole (no ownership)
+weak_ptr<int> wp = sp;
+```
+
+---
+
+## Lambda (C++11)
+
+```cpp
+auto somma = [](int a, int b) { return a + b; };
+cout << somma(3, 4);
+
+// Con capture
+int x = 10;
+auto aggiungi = [x](int n) { return n + x; };
+```
+
+---
+
+## Move semantics (C++11)
+
+```cpp
+vector<int> v1 = {1, 2, 3};
+vector<int> v2 = move(v1);  // v1 è ora vuoto, v2 ha i dati
+```
+
+---
+
+## Compilazione
+
+```bash
+g++ -std=c++17 -o programma main.cpp
+g++ -std=c++17 -Wall -O2 -o programma main.cpp
+```

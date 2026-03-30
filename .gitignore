@@ -1,0 +1,48 @@
+# ── Secrets e credenziali ─────────────────────────────
+.env
+*.key
+*.pem
+credentials.json
+token.json
+
+# ── Modelli Vosk (pesanti, si riscaricano) ────────────
+cipher-server/models/
+
+# ── Ambiente virtuale Python ──────────────────────────
+venv/
+.venv/
+env/
+
+# ── Cache Python ──────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+
+# ── Dati utente e memoria (generati a runtime) ────────
+cipher-server/memory/
+cipher-server/home/
+cipher-server/uploads/
+cipher-server/voices/
+cipher-server/scheduling/
+
+# ── File runtime ──────────────────────────────────────
+cipher-server/comando.txt
+
+# ── Audio ─────────────────────────────────────────────
+*.mp3
+*.wav
+*.ogg
+
+# ── Log ───────────────────────────────────────────────
+*.log
+logs/
+
+# ── Editor e OS ───────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
