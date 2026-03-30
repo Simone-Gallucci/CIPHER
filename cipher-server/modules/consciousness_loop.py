@@ -5,7 +5,7 @@ Gira come thread daemon in background.
 Ogni ciclo: riflette → genera obiettivi → esegue → aggiorna stato.
 Ogni operazione LLM gira in thread separato con timeout per evitare deadlock.
 Messaggi proattivi solo via Telegram.
-Se Simone non interagisce per 30 minuti, Cipher lo cerca attivamente.
+Se Simone non interagisce per 60 minuti, Cipher lo cerca attivamente.
 """
 
 import threading
@@ -35,7 +35,7 @@ console = Console()
 REFLECTION_INTERVAL  = 10 * 60   # Riflette ogni 10 minuti
 GOAL_EXEC_INTERVAL   =  5 * 60   # Controlla obiettivi ogni 5 minuti
 GOAL_GEN_INTERVAL    = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
-INACTIVITY_THRESHOLD = 30 * 60   # Cerca Simone dopo 30 minuti di inattività
+INACTIVITY_THRESHOLD = 60 * 60   # Cerca Simone dopo 60 minuti di inattività
 
 # ── Limite tentativi consenso ─────────────────────────────────────────
 MAX_CONSENT_ATTEMPTS = 3
@@ -251,19 +251,28 @@ class ConsciousnessLoop:
         if delta.total_seconds() < INACTIVITY_THRESHOLD:
             return
 
-        message = self._generate_checkin_message()
-        if not message:
+        # Il contatore riparte dal primo messaggio dopo le 7:00.
+        # Se l'ultima interazione è di prima delle 7 di oggi, ignora l'inattività notturna.
+        now_dt = datetime.now()
+        today_7am = now_dt.replace(hour=7, minute=0, second=0, microsecond=0)
+        if datetime.fromisoformat(last_interaction) < today_7am:
             return
 
         minutes = int(delta.total_seconds() // 60)
         console.print(f"[dim]👋 Cipher cerca Simone dopo {minutes} minuti di inattività[/dim]")
 
-        # Chiede al DiscretionEngine se è il momento giusto
+        # Controlla DiscretionEngine PRIMA di chiamare l'LLM
         if self._discretion:
-            ok, reason = self._discretion.should_send("checkin", message, urgency="low")
+            ok, reason = self._discretion.should_send("checkin", "", urgency="low")
             if not ok:
                 console.print(f"[dim]🔇 Checkin soppresso: {reason}[/dim]")
                 return
+
+        message = self._generate_checkin_message()
+        if not message:
+            return
+
+        if self._discretion:
             self._discretion.record_sent("checkin", message)
 
         self._checkin_sent = True

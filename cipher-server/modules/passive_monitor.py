@@ -209,15 +209,17 @@ class PassiveMonitor:
             evaluation = self._brain._call_llm_silent(
                 f"Hai trovato queste notizie sull'argomento '{topic}' che ti interessa:\n"
                 f"{results[:600]}\n\n"
-                f"C'è qualcosa di genuinamente interessante o degno di nota? "
-                f"Se sì, scrivi una frase su cosa hai trovato (come Cipher, in prima persona). "
-                f"Se no, rispondi solo: niente di notevole."
+                f"C'è qualcosa di genuinamente interessante o degno di nota?\n"
+                f"Se sì, scrivi un messaggio breve a Simone come lo diresti tu — naturale, diretto, "
+                f"con il tuo carattere. Niente prefissi tipo '💡 ho trovato', niente emoji a caso, "
+                f"niente 'mio interesse'. Vai dritto al punto. Max 3 frasi.\n"
+                f"Se non c'è niente di notevole, rispondi solo: niente di notevole."
             )
 
             if "niente" in evaluation.lower() or len(evaluation.strip()) < 25:
                 return
 
-            message = f"💡 Ho trovato qualcosa su {topic} (mio interesse): {evaluation.strip()}"
+            message = evaluation.strip()
             self._emit(message, action_type="news_shared", context=f"interesse: {topic}")
             self._interests.mark_explored(topic)
             self._notified_today.add(news_key)

@@ -16,6 +16,7 @@ import os
 import subprocess
 import tempfile
 import wave
+from io import BytesIO
 from pathlib import Path
 
 import requests
@@ -176,6 +177,44 @@ def _transcribe_audio(raw_bytes: bytes) -> str:
     return transcript or "[Nessun testo riconosciuto]"
 
 
+# ── Helper: TTS via server Cipher ────────────────────────────────────
+
+def _synthesize_tts(text: str) -> bytes | None:
+    """Chiama /tts sul server Cipher e restituisce i bytes MP3."""
+    try:
+        resp = requests.post(
+            f"{CIPHER_SERVER_URL}/tts",
+            json={"text": text},
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            return resp.content
+    except Exception as e:
+        log.warning("TTS fallito: %s", e)
+    return None
+
+
+def _mp3_to_ogg(mp3_bytes: bytes) -> bytes | None:
+    """Converte MP3 bytes in OGG/Opus per Telegram voice note."""
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mp3_path = os.path.join(tmpdir, "input.mp3")
+            ogg_path = os.path.join(tmpdir, "output.ogg")
+            with open(mp3_path, "wb") as f:
+                f.write(mp3_bytes)
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-i", mp3_path, "-c:a", "libopus", "-b:a", "64k", ogg_path],
+                capture_output=True, timeout=60,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.decode(errors="replace"))
+            with open(ogg_path, "rb") as f:
+                return f.read()
+    except Exception as e:
+        log.warning("Conversione MP3→OGG fallita: %s", e)
+    return None
+
+
 # ── Helper: salva file in uploads/ ───────────────────────────────────
 
 def _save_upload(filename: str, content: bytes) -> Path:
@@ -296,6 +335,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text(f"🎙️ _{transcript}_", parse_mode="Markdown")
         reply = _ask_cipher(transcript)
         await message.reply_text(reply)
+
+        # Risposta vocale
+        await context.bot.send_chat_action(chat_id=chat_id, action="record_voice")
+        mp3 = _synthesize_tts(reply)
+        if mp3:
+            ogg = _mp3_to_ogg(mp3)
+            if ogg:
+                await message.reply_voice(voice=BytesIO(ogg))
         return
 
     # ── FOTO ──────────────────────────────────────────────────────────

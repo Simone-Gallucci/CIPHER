@@ -172,8 +172,9 @@ class Scheduler:
             try:
                 thought = self._brain._call_llm_silent(
                     f"Sei Cipher. È mattina ({_italian_date(now)}). "
-                    f"Scrivi UNA frase breve di buongiorno con il tuo carattere — "
-                    f"diretto, non banale. Solo la frase, niente altro."
+                    f"Scrivi UNA frase breve con il tuo carattere per iniziare la giornata — "
+                    f"diretto, non banale. NON iniziare con 'Buongiorno' (è già nel messaggio). "
+                    f"Solo la frase, niente altro."
                 )
                 if thought:
                     lines.append(f"\n💬 {thought.strip()}")

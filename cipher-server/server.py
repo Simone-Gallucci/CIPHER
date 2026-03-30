@@ -144,6 +144,19 @@ def get_memory():
     return jsonify(brain._memory.profile)
 
 
+@app.route("/memory/interests", methods=["GET"])
+def get_interests():
+    interests_file = Config.MEMORY_DIR / "cipher_interests.json"
+    if not interests_file.exists():
+        return jsonify({"interests": []})
+    try:
+        import json
+        interests = json.loads(interests_file.read_text(encoding="utf-8"))
+        return jsonify({"interests": interests})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/reset", methods=["POST"])
 def reset():
     brain.reset()
