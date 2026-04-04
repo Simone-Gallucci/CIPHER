@@ -3,6 +3,7 @@ modules/brain.py – Intelligenza di Cipher con memoria persistente
 """
 
 import json
+import time
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
@@ -46,6 +47,65 @@ def _build_system_prompt(memory_context: str) -> str:
     if memory_context:
         sections.append(memory_context)
 
+    # Profilo motivazionale di Simone
+    profile_file = Config.MEMORY_DIR / "profile.json"
+    if profile_file.exists():
+        try:
+            profile = json.loads(profile_file.read_text(encoding="utf-8"))
+            motivations = profile.get("motivations", {})
+            if motivations:
+                lines = ["## Cosa muove Simone (profilo motivazionale):"]
+                for key, values in motivations.items():
+                    if key == "aggiornato_il" or not isinstance(values, list) or not values:
+                        continue
+                    lines.append(f"- **{key}**: {', '.join(values)}")
+                if len(lines) > 1:
+                    sections.append("\n".join(lines))
+        except Exception:
+            pass
+
+    # Insights sui pattern comportamentali
+    insights_file = Config.MEMORY_DIR / "pattern_insights.md"
+    if insights_file.exists():
+        try:
+            insights_text = insights_file.read_text(encoding="utf-8").strip()
+            if insights_text:
+                # Prende solo l'ultimo blocco (più recente)
+                blocks = insights_text.split("---")
+                last_block = blocks[-1].strip() if blocks else ""
+                if last_block:
+                    sections.append(f"## Pattern comportamentali (analisi recente):\n{last_block}")
+        except Exception:
+            pass
+
+    # Note sulla voce — coerenza tra sessioni
+    voice_file = Config.MEMORY_DIR / "voice_notes.md"
+    if voice_file.exists():
+        try:
+            voice_text = voice_file.read_text(encoding="utf-8").strip()
+            if voice_text:
+                blocks = voice_text.split("---")
+                # Prende gli ultimi 2 blocchi (ultime 2 notti)
+                recent_blocks = [b.strip() for b in blocks if b.strip()][-2:]
+                if recent_blocks:
+                    sections.append(
+                        "## Come parli — note sulla tua voce (ultime sessioni):\n"
+                        + "\n---\n".join(recent_blocks)
+                    )
+        except Exception:
+            pass
+
+    # Contesto real-time (meteo + notizie)
+    try:
+        from modules.realtime_context import RealtimeContext, REALTIME_FILE
+        if REALTIME_FILE.exists():
+            rt = RealtimeContext()
+            rt_context = rt.build_context()
+            if rt_context:
+                sections.append(rt_context)
+    except Exception:
+        pass
+
     # Obiettivi autonomi
     goals_file = Config.MEMORY_DIR / "goals.md"
     if goals_file.exists():
@@ -80,6 +140,11 @@ class Brain:
         self._pattern_learner   = None   # PatternLearner
         self._episodic_memory   = None   # EpisodicMemory
 
+        # Cache system prompt
+        self._system_prompt_cache: str  = ""
+        self._system_prompt_ts:   float = 0.0
+        self._SYSTEM_PROMPT_TTL:  float = 300.0  # 5 minuti
+
         console.print(
             f"[green]✓ Brain pronto[/green] "
             f"[dim](OpenRouter → {Config.OPENROUTER_MODEL})[/dim]"
@@ -107,34 +172,68 @@ class Brain:
     #  LLM calls                                                           #
     # ------------------------------------------------------------------ #
 
-    def _build_messages(self, history: list[dict]) -> list[dict]:
+    def _get_system_prompt(self) -> str:
+        if time.time() - self._system_prompt_ts < self._SYSTEM_PROMPT_TTL:
+            return self._system_prompt_cache
         memory_ctx = self._memory.build_context()
-        # Aggiunge contesto episodico se disponibile
         if self._episodic_memory:
             ep_ctx = self._episodic_memory.build_context(n=4)
             if ep_ctx:
                 memory_ctx = memory_ctx + "\n\n" + ep_ctx if memory_ctx else ep_ctx
-        system = _build_system_prompt(memory_ctx)
-        return [{"role": "system", "content": system}] + history
+        self._system_prompt_cache = _build_system_prompt(memory_ctx)
+        self._system_prompt_ts = time.time()
+        return self._system_prompt_cache
+
+    def invalidate_system_prompt(self) -> None:
+        """Forza il ricalcolo al prossimo messaggio (es. dopo aggiornamento memoria)."""
+        self._system_prompt_ts = 0.0
+
+    def _build_messages(self, history: list[dict]) -> list[dict]:
+        return [{"role": "system", "content": self._get_system_prompt()}] + history
 
     def _call_llm(self, history: list[dict]) -> str:
+        for attempt in range(3):
+            try:
+                response = self._client.chat.completions.create(
+                    model=Config.OPENROUTER_MODEL,
+                    max_tokens=1024,
+                    messages=self._build_messages(history),
+                    extra_headers={"X-Title": "Cipher AI Assistant"},
+                )
+                content = response.choices[0].message.content
+                return content.strip() if content else "Non ho ricevuto una risposta."
+            except Exception as e:
+                err = str(e).lower()
+                if ("429" in err or "rate_limit" in err or "rate limit" in err) and attempt < 2:
+                    wait = 20 * (attempt + 1)
+                    console.print(f"[yellow]⏳ Rate limit, riprovo tra {wait}s (tentativo {attempt+1}/3)...[/yellow]")
+                    time.sleep(wait)
+                    continue
+                console.print(f"[red]❌ LLM error: {e}[/red]")
+                raise RuntimeError(f"Errore OpenRouter: {e}")
+
+    def _call_llm_silent(self, prompt: str) -> str:
+        """Chiamata background leggera — usa BACKGROUND_MODEL (Haiku).
+        Per estrazione, classificazione, decisioni semplici."""
         try:
             response = self._client.chat.completions.create(
-                model=Config.OPENROUTER_MODEL,
-                max_tokens=1024,
-                messages=self._build_messages(history),
+                model=Config.BACKGROUND_MODEL,
+                max_tokens=256,
+                messages=[{"role": "user", "content": prompt}],
                 extra_headers={"X-Title": "Cipher AI Assistant"},
             )
             content = response.choices[0].message.content
-            return content.strip() if content else "Non ho ricevuto una risposta."
-        except Exception as e:
-            raise RuntimeError(f"Errore OpenRouter: {e}")
+            return content.strip() if content else ""
+        except Exception:
+            return ""
 
-    def _call_llm_silent(self, prompt: str) -> str:
+    def _call_llm_quality(self, prompt: str, max_tokens: int = 512) -> str:
+        """Chiamata dove la qualità conta — usa OPENROUTER_MODEL (Sonnet).
+        Per sommari, scalette, voice notes, ragionamenti profondi."""
         try:
             response = self._client.chat.completions.create(
                 model=Config.OPENROUTER_MODEL,
-                max_tokens=256,
+                max_tokens=max_tokens,
                 messages=[{"role": "user", "content": prompt}],
                 extra_headers={"X-Title": "Cipher AI Assistant"},
             )
@@ -254,22 +353,39 @@ class Brain:
         if len(self._history) > Config.MAX_HISTORY_MESSAGES * 2:
             self._history = self._history[-(Config.MAX_HISTORY_MESSAGES * 2):]
 
-        self._memory.extract_from_message(user_input, self._call_llm_silent)
+        # Estrazione memoria e pattern — in thread separato, con delay per non competere con la risposta
+        import threading, time as _t
+        def _background_tasks():
+            _t.sleep(10)  # aspetta che la risposta principale sia completata
+            self._memory.extract_from_message(user_input, self._call_llm_silent)
+            if self._pattern_learner:
+                try:
+                    now = datetime.now()
+                    topic = self._call_llm_silent(
+                        f"In 2-3 parole, qual è l'argomento principale di questo messaggio? "
+                        f"Solo le parole, nient'altro.\nMessaggio: {user_input[:200]}"
+                    )
+                    if topic:
+                        self._pattern_learner.record_interaction(now.hour, now.weekday(), topic.strip())
+                except Exception:
+                    pass
+        threading.Thread(target=_background_tasks, daemon=True).start()
 
-        # Registra pattern comportamentale (argomento + ora + giorno)
-        if self._pattern_learner:
-            try:
-                now = datetime.now()
-                topic = self._call_llm_silent(
-                    f"In 2-3 parole, qual è l'argomento principale di questo messaggio? "
-                    f"Solo le parole, nient'altro.\nMessaggio: {user_input[:200]}"
-                )
-                if topic:
-                    self._pattern_learner.record_interaction(now.hour, now.weekday(), topic.strip())
-            except Exception:
-                pass
-
-        raw = self._call_llm(self._history)
+        try:
+            raw = self._call_llm(self._history)
+        except RuntimeError as e:
+            err = str(e).lower()
+            if "insufficient" in err or "credit" in err or "quota" in err or "billing" in err or "402" in err:
+                return "Non riesco a risponderti in questo momento — i crediti API sono esauriti. Ricarica l'account per continuare."
+            if "429" in err or "rate_limit" in err or "rate limit" in err:
+                return "Sto ricevendo troppe richieste al minuto, aspetta qualche secondo e riprova."
+            if "401" in err or "authentication" in err or "api key" in err:
+                return "C'è un problema con la chiave API — non riesco ad autenticarmi. Controlla la configurazione nel .env."
+            if "timeout" in err or "timed out" in err:
+                return "La richiesta ha impiegato troppo tempo e ho dovuto interromperla. Riprova tra poco."
+            if "connection" in err or "network" in err or "503" in err or "502" in err:
+                return "Non riesco a raggiungere il server in questo momento. Controlla la connessione."
+            return "Si è verificato un errore e non riesco a risponderti adesso. Riprova tra poco."
 
         action_data = self._extract_action(raw)
         if action_data:
@@ -280,7 +396,6 @@ class Brain:
             if self._dispatcher.has_pending():
                 raw_clean = self._strip_action_json(raw)
                 self._history.append({"role": "assistant", "content": raw_clean})
-                self._memory.add_message("user", user_input)
                 self._memory.add_message("assistant", action_result)
                 return action_result
 

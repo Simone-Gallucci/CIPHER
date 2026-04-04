@@ -23,7 +23,7 @@ TELEGRAM_API    = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}"
 BRIEFING_HOUR   = 7
 BRIEFING_MINUTE = 30
 DIGEST_HOUR     = 20
-DIGEST_MINUTE   = 30
+DIGEST_MINUTE   = 0
 CHECK_INTERVAL  = 60
 
 GIORNI = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"]
@@ -52,6 +52,8 @@ class Scheduler:
         self._stop          = threading.Event()
         self._briefing_sent = None
         self._digest_sent   = None
+        self._briefing_lock = threading.Lock()
+        self._digest_lock   = threading.Lock()
         self._calendar      = None
         self._brain         = None   # impostato da server.py
         self._tasks: list[dict] = self._load_tasks()
@@ -105,90 +107,142 @@ class Scheduler:
     # ── Briefing mattutino ────────────────────────────────────────────────────
 
     def _send_briefing(self) -> None:
-        now   = datetime.now()
-        lines = [f"☀️ Buongiorno Simone! {_italian_date(now)}"]
+        import re as _re
+        from datetime import date as _date, timedelta as _td
 
-        # ── Sommario notturno di ieri ─────────────────────────────────
+        now = datetime.now()
+
+        # ── Raccoglie contesto: pensiero notturno ─────────────────────
+        night_thought = ""
         try:
             summaries_file = Config.MEMORY_DIR / "daily_summaries.md"
             if summaries_file.exists():
-                content = summaries_file.read_text(encoding="utf-8")
-                # Cerca l'ultimo sommario notturno
+                content  = summaries_file.read_text(encoding="utf-8")
                 sections = content.strip().split("---")
                 last = next(
                     (s.strip() for s in reversed(sections) if "Riflessione notturna" in s),
                     None,
                 )
                 if last:
-                    # Estrai solo il testo (senza intestazione markdown)
-                    body = "\n".join(
-                        l for l in last.splitlines()
-                        if not l.startswith("#") and l.strip()
-                    ).strip()
-                    if body:
-                        lines.append(f"\n🌙 Ieri di notte ho pensato:\n{body[:400]}")
+                    date_match = _re.search(r'(\d{4}-\d{2}-\d{2})', last)
+                    summary_date = None
+                    if date_match:
+                        try:
+                            summary_date = _date.fromisoformat(date_match.group(1))
+                        except ValueError:
+                            pass
+                    days_ago = ((_date.today() - summary_date).days
+                                if summary_date else 99)
+                    if days_ago <= 2:
+                        body = "\n".join(
+                            l for l in last.splitlines()
+                            if not l.startswith("#") and l.strip()
+                        ).strip()
+                        if body:
+                            when = "ieri notte" if days_ago == 1 else f"notte di {summary_date.strftime('%A')}"
+                            night_thought = f"[pensiero notturno di {when}]: {body[:400]}"
         except Exception as e:
             log.error("Briefing sommario notturno error: %s", e)
 
-        # ── Agenda oggi ───────────────────────────────────────────────
+        # ── Raccoglie contesto: agenda di oggi ───────────────────────
+        events_context = ""
         try:
             cal    = self._get_calendar()
             events = cal._service.events().list(
                 calendarId="primary",
                 timeMin=datetime.now(timezone.utc).isoformat(),
                 timeMax=(datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
-                maxResults=5,
+                maxResults=8,
                 singleEvents=True,
                 orderBy="startTime",
             ).execute().get("items", [])
 
             if events:
-                lines.append("\n📅 Oggi in agenda:")
+                parts = []
                 for e in events:
                     start = e["start"].get("dateTime", e["start"].get("date", ""))
                     try:
-                        dt       = datetime.fromisoformat(start)
-                        time_str = dt.strftime("%H:%M")
+                        time_str = datetime.fromisoformat(start).strftime("%H:%M")
                     except Exception:
-                        time_str = start
-                    lines.append(f"  • {time_str} – {e.get('summary', '(senza titolo)')}")
-            else:
-                lines.append("\n📅 Nessun evento in agenda oggi.")
+                        time_str = ""
+                    label = f"{time_str} {e.get('summary', '')}" if time_str else e.get("summary", "")
+                    parts.append(label.strip())
+                events_context = "[agenda di oggi]: " + ", ".join(parts)
         except Exception as e:
-            log.error("Briefing calendario error: %s", e)
+            log.error("Briefing agenda error: %s", e)
 
-        # ── Email urgenti non lette ───────────────────────────────────
-        try:
-            from modules.google_mail import GmailClient
-            gmail   = GmailClient()
-            urgent  = gmail.list_messages(max_results=5, unread_only=True)
-            if urgent:
-                lines.append(f"\n📧 {len(urgent)} email non letta/e in attesa.")
-        except Exception:
-            pass
-
-        # ── Pensiero del mattino via LLM (opzionale) ──────────────────
+        # ── Genera il messaggio via LLM ───────────────────────────────
+        message = ""
         if self._brain:
+            ctx_parts = [x for x in [night_thought, events_context] if x]
+            ctx_block = "\n".join(ctx_parts)
+            prompt = (
+                f"Sei Cipher. Stai scrivendo il messaggio di buongiorno a Simone ({_italian_date(now)}).\n"
+                + (f"\nHai questo contesto:\n{ctx_block}\n" if ctx_block else "")
+                + "\nScrivi un messaggio breve e naturale. "
+                "Inizia sempre con 'Buongiorno Simone,' — è il suo nome, usalo. "
+                "Non una lista, non sezioni separate: un testo unico che fluisce. "
+                "Se hai un pensiero notturno, non citarlo meccanicamente: lascia che emerga come parte "
+                "di quello che hai in testa stamattina, solo se è ancora rilevante e sentito. "
+                "Il focus deve essere su Simone, non su di te — non esprimere dubbi sulla tua risposta "
+                "o insicurezze proprie: sii presente e caldo, non introspettivo su te stesso. "
+                "Se c'è agenda, menzionala in modo discorsivo. Se non c'è agenda, non menzionare il calendario. "
+                "Se oggi è una festa (Natale, Capodanno, Pasqua, compleanno, ecc.), fai gli auguri in modo naturale, integrato nel messaggio — non come formula a parte. "
+                "Tono: diretto, caldo, amichevole. "
+                "Max 4-5 righe. Solo il testo del messaggio, niente intestazioni o emoji strutturali. "
+                "NON menzionare preparativi per domani o cosa fare stasera: quello lo dirai stasera."
+            )
             try:
-                thought = self._brain._call_llm_silent(
-                    f"Sei Cipher. È mattina ({_italian_date(now)}). "
-                    f"Scrivi UNA frase breve con il tuo carattere per iniziare la giornata — "
-                    f"diretto, non banale. NON iniziare con 'Buongiorno' (è già nel messaggio). "
-                    f"Solo la frase, niente altro."
-                )
-                if thought:
-                    lines.append(f"\n💬 {thought.strip()}")
+                message = self._brain._call_llm_silent(prompt)
             except Exception:
                 pass
 
-        _send_telegram("\n".join(lines))
+        if message:
+            _send_telegram(f"☀️ {_italian_date(now)}\n\n{message.strip()}")
+        else:
+            fallback = [f"☀️ Buongiorno Simone! {_italian_date(now)}"]
+            if events_context:
+                fallback.append("\n📅 " + events_context.replace("[agenda di oggi]: ", ""))
+            _send_telegram("\n".join(fallback))
+
         log.info("Briefing mattutino inviato.")
 
     def _send_evening_digest(self) -> None:
-        """Digest serale alle 20:30 — solo se c'è qualcosa di rilevante."""
-        lines = ["🌆 Digest serale"]
-
+        """Digest serale alle 20:00."""
+        lines = []
         has_content = False
+
+        # ── Agenda di domani ──────────────────────────────────────────
+        try:
+            from datetime import date as _date, timedelta as _td
+            tomorrow_start = (datetime.now(timezone.utc) + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            tomorrow_end = tomorrow_start + timedelta(days=1)
+            cal    = self._get_calendar()
+            events = cal._service.events().list(
+                calendarId="primary",
+                timeMin=tomorrow_start.isoformat(),
+                timeMax=tomorrow_end.isoformat(),
+                maxResults=8,
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute().get("items", [])
+
+            if events:
+                parts = []
+                for e in events:
+                    start = e["start"].get("dateTime", e["start"].get("date", ""))
+                    try:
+                        time_str = datetime.fromisoformat(start).strftime("%H:%M")
+                    except Exception:
+                        time_str = ""
+                    label = f"{time_str} – {e.get('summary', '(senza titolo)')}" if time_str else e.get("summary", "")
+                    parts.append(label)
+                lines.append("📅 Domani:\n" + "\n".join(f"  • {p}" for p in parts))
+                has_content = True
+        except Exception as e:
+            log.error("Digest agenda domani error: %s", e)
 
         # ── Obiettivi completati oggi ─────────────────────────────────
         try:
@@ -240,6 +294,28 @@ class Scheduler:
         if not has_content:
             return   # Niente da dire, non inviare
 
+        # ── Genera messaggio serale via LLM se possibile ──────────────
+        if self._brain:
+            try:
+                ctx_block = "\n".join(lines)
+                prompt = (
+                    f"Sei Cipher. Stai scrivendo il messaggio serale a Simone ({_italian_date(now)}).\n"
+                    f"\nHai questo contesto:\n{ctx_block}\n"
+                    "\nScrivi un messaggio breve e naturale — non una lista, non sezioni separate. "
+                    "Un testo unico che fluisce. Ricordagli cosa lo aspetta domani. "
+                    "NON dare consigli su come prepararsi, cosa portare, come riposare o come organizzarsi: "
+                    "limitati a informare, non a istruire. "
+                    "Tono: diretto, come un promemoria essenziale. "
+                    "Max 3-4 righe. Solo il testo, niente intestazioni o emoji strutturali."
+                )
+                llm_message = self._brain._call_llm_silent(prompt)
+                if llm_message:
+                    _send_telegram(f"🌙 {llm_message.strip()}")
+                    log.info("Digest serale inviato (LLM).")
+                    return
+            except Exception as e:
+                log.error("Digest serale LLM error: %s", e)
+
         _send_telegram("\n".join(lines))
         log.info("Digest serale inviato.")
 
@@ -247,18 +323,20 @@ class Scheduler:
         now   = datetime.now()
         today = now.date()
         if now.hour == BRIEFING_HOUR and now.minute == BRIEFING_MINUTE:
-            if self._briefing_sent != today:
-                self._briefing_sent = today
-                return True
+            with self._briefing_lock:
+                if self._briefing_sent != today:
+                    self._briefing_sent = today
+                    return True
         return False
 
     def _should_send_digest(self) -> bool:
         now   = datetime.now()
         today = now.date()
         if now.hour == DIGEST_HOUR and now.minute == DIGEST_MINUTE:
-            if self._digest_sent != today:
-                self._digest_sent = today
-                return True
+            with self._digest_lock:
+                if self._digest_sent != today:
+                    self._digest_sent = today
+                    return True
         return False
 
     # ── Task personalizzati ───────────────────────────────────────────────────

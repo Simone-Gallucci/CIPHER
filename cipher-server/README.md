@@ -54,7 +54,7 @@ Cipher è composto da tre strati:
 ### Conversazione
 - Risponde via Telegram, WhatsApp, API REST, CLI testo e microfono
 - Memoria persistente della conversazione e del profilo utente
-- Integrazione Google Calendar e Gmail
+- Integrazione Google Calendar
 - Web search con DuckDuckGo
 - Lettura e analisi file (PDF, Excel, CSV, testo)
 - Text-to-Speech via ElevenLabs
@@ -63,7 +63,7 @@ Cipher è composto da tre strati:
 ### Autonomia e Coscienza
 - **ConsciousnessLoop** — thread daemon che gira ogni 60 secondi:
   - Auto-riflessione ogni 10 minuti → aggiorna stato emotivo
-  - Generazione obiettivi autonomi ogni 20 minuti
+  - Generazione obiettivi autonomi ogni 20 minuti (azioni disponibili: `web_search`, `send_telegram`, `read_calendar`, `self_reflect`, `write_memory`)
   - Esecuzione obiettivi ogni 5 minuti
   - Check inattività → contatta l'utente dopo 30 minuti
 - **7 stati emotivi**: curious, content, bored, frustrated, protective, neutral
@@ -85,9 +85,9 @@ Cipher ha curiosità indipendenti da quelle dell'utente:
   - Ore silenziose 23:00–07:00 (solo urgenti passano)
   - Anti-spam: max 3 notifiche/ora, max 12/giorno
   - Deprioritizza azioni con bassa efficacia storica
-- **Briefing mattutino** alle 7:30 — sommario notturno + agenda + email urgenti + pensiero del giorno
-- **Digest serale** alle 20:30 — solo se ha qualcosa di rilevante da dire
-- **Monitor passivo** ogni 10 minuti — scadenze calendario, email urgenti, notizie su argomenti di interesse
+- **Briefing mattutino** alle 7:30 — messaggio naturale generato via LLM con pensiero notturno e agenda del giorno (niente liste o sezioni fisse)
+- **Digest serale** alle 20:00 — solo se ha qualcosa di rilevante da dire
+- **Monitor passivo** ogni 10 minuti — scadenze calendario (solo dopo le 9:00, saltate nei festivi italiani per eventi professionali), notizie su argomenti di interesse
 - **Meta-cognizione** — traccia l'impatto di ogni azione proattiva e impara cosa funziona
 
 ### Pattern e Anticipazione
@@ -146,9 +146,11 @@ Vengono letti in ordine alfabetico e concatenati nel system prompt.
 comportamento/
 ├── 00_identity.txt      # Chi è Cipher, tono, carattere
 ├── azioni.md            # Azioni web (web_fetch, web_explore_spa, ecc.)
-├── azioni.txt           # Tutte le azioni disponibili (calendario, gmail, fs, shell, ecc.)
+├── azioni.txt           # Tutte le azioni disponibili (calendario, fs, shell, ecc.)
 └── dev_protocol.txt     # Regole operative
 ```
+
+Quando Simone chiede a Cipher "che obiettivi hai?", "che programmi hai?" o simili, Cipher elenca gli obiettivi attivi dal proprio contesto con una frase descrittiva per ciascuno. Se non ne ha, lo dice e aggiunge cosa vorrebbe esplorare.
 
 ---
 

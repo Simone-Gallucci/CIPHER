@@ -69,7 +69,8 @@ class GmailClient:
                     data = part.get("body", {}).get("data", "")
                     if data:
                         return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
-            return self._extract_body(payload["parts"][0])
+            if payload["parts"]:
+                return self._extract_body(payload["parts"][0])
         data = payload.get("body", {}).get("data", "")
         if data:
             return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")

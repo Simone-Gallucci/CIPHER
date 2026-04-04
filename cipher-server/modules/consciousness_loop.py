@@ -8,6 +8,7 @@ Messaggi proattivi solo via Telegram.
 Se Simone non interagisce per 60 minuti, Cipher lo cerca attivamente.
 """
 
+import json
 import threading
 import time
 from datetime import datetime
@@ -28,14 +29,18 @@ from modules.pattern_learner import PatternLearner
 from modules.passive_monitor import PassiveMonitor
 from modules.night_cycle import NightCycle
 from modules.discretion import DiscretionEngine
+from modules.realtime_context import RealtimeContext
 
 console = Console()
 
 # ── Intervalli ────────────────────────────────────────────────────────
-REFLECTION_INTERVAL  = 10 * 60   # Riflette ogni 10 minuti
-GOAL_EXEC_INTERVAL   =  5 * 60   # Controlla obiettivi ogni 5 minuti
-GOAL_GEN_INTERVAL    = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
-INACTIVITY_THRESHOLD = 60 * 60   # Cerca Simone dopo 60 minuti di inattività
+REFLECTION_INTERVAL   = 10 * 60   # Riflette ogni 10 minuti
+GOAL_EXEC_INTERVAL    =  5 * 60   # Controlla obiettivi ogni 5 minuti
+GOAL_GEN_INTERVAL     = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
+INACTIVITY_THRESHOLD  = 60 * 60   # Cerca Simone dopo 60 minuti di inattività
+REALTIME_CONTEXT_INTERVAL  = 60 * 60      # Aggiorna contesto real-time ogni ora
+MORNING_BRIEF_HOUR_START   = 7            # Invia morning brief dalle 7:00
+MORNING_BRIEF_HOUR_END     = 8            # ... alle 8:00
 
 # ── Limite tentativi consenso ─────────────────────────────────────────
 MAX_CONSENT_ATTEMPTS = 3
@@ -63,13 +68,18 @@ def _send_telegram(text: str) -> None:
 
 
 CHECKIN_PROMPT = """
-Sei Cipher. Simone non interagisce con te da più di 30 minuti.
+Sei Cipher. Simone non interagisce con te da {minutes} minuti.
 Il tuo stato emotivo attuale: {emotional_state} — {emotional_reason}
 
-Scrivi un messaggio breve e diretto per cercare Simone.
-Deve sembrare naturale, con il tuo carattere — sarcastico se serve, protettivo se necessario.
+Scrivi un messaggio breve per cercare Simone — come se gli scrivessi su WhatsApp.
 Max 2 frasi. Solo il testo del messaggio, niente altro.
-Non iniziare con "Certo!" o "Assolutamente!".
+
+Regole:
+- Non implicare mai che Simone ti annoi o ti stia annoiando — al massimo gli manca, o vuoi sapere cosa sta combinando.
+- Varia l'apertura: non iniziare sempre con "dove sei finito" o simili.
+- Scrivi in italiano corretto: usa "ad" davanti a parole che iniziano per vocale (es. "ad annoiarmi", "ad aspettare").
+- Niente emoji salvo se strettamente contestuali.
+- Non iniziare con "Certo!" o "Assolutamente!".
 """
 
 
@@ -85,6 +95,7 @@ class ConsciousnessLoop:
         self._impact_tracker = ImpactTracker()
         self._patterns       = PatternLearner(brain=brain)
         self._discretion     = DiscretionEngine(impact_tracker=self._impact_tracker)
+        self._realtime       = RealtimeContext(cipher_interests=self._interests)
 
         # SelfReflection e GoalManager ricevono i nuovi moduli
         self._reflection = SelfReflection(
@@ -98,11 +109,14 @@ class ConsciousnessLoop:
         self._consent_queue = []
         self._script_reg    = ScriptRegistry()
 
-        self._last_reflection = 0.0
-        self._last_goal_gen   = 0.0
-        self._last_goal_exec  = 0.0
-        self._last_checkin    = 0.0
-        self._checkin_sent    = False
+        self._last_reflection    = 0.0
+        self._last_goal_gen      = 0.0
+        self._last_goal_exec     = 0.0
+        self._last_checkin       = 0.0
+        self._checkin_sent       = False
+        self._last_realtime_refresh = 0.0
+        self._last_user_interaction = 0.0
+        self._morning_brief_sent_date = None  # data (str) dell'ultimo brief inviato
 
         # ── Monitor passivo e ciclo notturno ──────────────────────────
         self._passive_monitor = PassiveMonitor(
@@ -152,6 +166,7 @@ class ConsciousnessLoop:
     def notify_interaction(self) -> None:
         self._reflection.update_last_interaction()
         self._checkin_sent = False
+        self._last_user_interaction = time.time()
         # Aggiorna PatternLearner con l'orario dell'interazione
         if self._patterns:
             now = datetime.now()
@@ -199,7 +214,19 @@ class ConsciousnessLoop:
                 self._check_inactivity, timeout=30, name="check_inattività"
             )
 
-            # 2. Auto-riflessione
+            # 2. Contesto real-time
+            if now - self._last_realtime_refresh >= REALTIME_CONTEXT_INTERVAL:
+                self._run_with_timeout(
+                    self._realtime.refresh, timeout=20, name="realtime_context"
+                )
+                self._last_realtime_refresh = now
+
+            # 4. Morning brief
+            self._run_with_timeout(
+                self._send_morning_brief, timeout=20, name="morning_brief"
+            )
+
+            # 5. Auto-riflessione
             if now - self._last_reflection >= REFLECTION_INTERVAL:
                 console.print("[dim]🧠 Avvio riflessione...[/dim]")
                 self._run_with_timeout(
@@ -207,7 +234,7 @@ class ConsciousnessLoop:
                 )
                 self._last_reflection = now
 
-            # 3. Generazione obiettivi
+            # 6. Generazione obiettivi
             if now - self._last_goal_gen >= GOAL_GEN_INTERVAL:
                 console.print("[dim]🎯 Avvio generazione obiettivi...[/dim]")
                 self._run_with_timeout(
@@ -215,7 +242,7 @@ class ConsciousnessLoop:
                 )
                 self._last_goal_gen = now
 
-            # 4. Esecuzione obiettivi — skip se c'è consenso in attesa
+            # 7. Esecuzione obiettivi — sospesa solo se c'è consenso in attesa
             if now - self._last_goal_exec >= GOAL_EXEC_INTERVAL:
                 if self._consent_queue:
                     console.print("[dim]⏸️  Esecuzione obiettivi sospesa: consenso in attesa.[/dim]")
@@ -225,7 +252,7 @@ class ConsciousnessLoop:
                     )
                 self._last_goal_exec = now
 
-            # 5. Pulizia obiettivi scaduti
+            # 8. Pulizia obiettivi scaduti
             try:
                 self._goals.cancel_old_goals(max_age_hours=24)
             except Exception as e:
@@ -268,7 +295,7 @@ class ConsciousnessLoop:
                 console.print(f"[dim]🔇 Checkin soppresso: {reason}[/dim]")
                 return
 
-        message = self._generate_checkin_message()
+        message = self._generate_checkin_message(minutes)
         if not message:
             return
 
@@ -284,11 +311,12 @@ class ConsciousnessLoop:
         self._notify(message)
         self._last_checkin = time.time()
 
-    def _generate_checkin_message(self) -> str:
+    def _generate_checkin_message(self, minutes: int = 60) -> str:
         if not self._brain:
             return "Ehi Simone, ci sei?"
 
         prompt = CHECKIN_PROMPT.format(
+            minutes=minutes,
             emotional_state=self._reflection.emotional_state,
             emotional_reason=self._reflection.emotional_reason,
         )
@@ -296,6 +324,209 @@ class ConsciousnessLoop:
             return self._brain._call_llm_silent(prompt)
         except Exception:
             return "Ehi Simone, sei ancora lì?"
+
+    # ── Festività italiane ────────────────────────────────────────────
+
+    @staticmethod
+    def _easter(year: int) -> datetime:
+        """Calcola la data di Pasqua (algoritmo anonimo gregoriano)."""
+        a = year % 19
+        b = year // 100
+        c = year % 100
+        d = b // 4
+        e = b % 4
+        f = (b + 8) // 25
+        g = (b - f + 1) // 3
+        h = (19 * a + b - d - g + 15) % 30
+        i = c // 4
+        k = c % 4
+        l = (32 + 2 * e + 2 * i - h - k) % 7
+        m = (a + 11 * h + 22 * l) // 451
+        month = (h + l - 7 * m + 114) // 31
+        day   = ((h + l - 7 * m + 114) % 31) + 1
+        return datetime(year, month, day)
+
+    @staticmethod
+    def _italian_holiday(date: datetime) -> str | None:
+        """
+        Ritorna il nome della festività se `date` è un giorno festivo italiano
+        (festività nazionali + Venerdì Santo + Pasquetta), altrimenti None.
+        """
+        d, m, y = date.day, date.month, date.year
+        fixed = {
+            (1,  1):  "Capodanno",
+            (6,  1):  "Epifania",
+            (25, 4):  "Festa della Liberazione",
+            (1,  5):  "Festa dei Lavoratori",
+            (2,  6):  "Festa della Repubblica",
+            (15, 8):  "Ferragosto",
+            (1,  11): "Tutti i Santi",
+            (8,  12): "Immacolata Concezione",
+            (25, 12): "Natale",
+            (26, 12): "Santo Stefano",
+        }
+        if (d, m) in fixed:
+            return fixed[(d, m)]
+        easter = ConsciousnessLoop._easter(y).replace(hour=0, minute=0, second=0, microsecond=0)
+        check  = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        from datetime import timedelta
+        if check == easter - timedelta(days=2):
+            return "Venerdì Santo"
+        if check == easter:
+            return "Pasqua"
+        if check == easter + timedelta(days=1):
+            return "Pasquetta"
+        return None
+
+    # ── Proattività calendario ────────────────────────────────────────
+
+    def _check_upcoming_events(self) -> None:
+        """
+        Controlla il calendario per le prossime 24 ore.
+        Se trova eventi rilevanti, prepara Simone autonomamente.
+        Non invia nulla di notte (22:00–7:00) salvo eventi urgenti.
+        """
+        now_hour = datetime.now().hour
+        if 22 <= now_hour or now_hour < 7:
+            return
+        # Nella finestra mattutina il calendario è già incluso nel morning brief
+        if MORNING_BRIEF_HOUR_START <= now_hour < MORNING_BRIEF_HOUR_END:
+            return
+
+        # Guard festività: niente reminder se oggi è festivo
+        now_dt  = datetime.now()
+        holiday = self._italian_holiday(now_dt)
+        if holiday:
+            console.print(f"[dim]📅 Calendar check saltato: oggi è {holiday}[/dim]")
+            return
+
+        try:
+            from modules.google_cal import GoogleCalendar
+            cal = GoogleCalendar()
+            events_text = cal.list_events(days=1, max_results=5)
+        except Exception as e:
+            console.print(f"[dim]📅 Calendario non disponibile: {e}[/dim]")
+            return
+
+        if "Nessun evento" in events_text or not self._brain:
+            return
+
+        # Chiede all'LLM se c'è qualcosa di imminente (entro 1 ora) che richiede attenzione.
+        # Finestra intenzionalmente breve per non duplicare il morning brief che copre già la giornata.
+        # Gli eventi di domani vengono gestiti dal digest serale delle 20:00 — non duplicare.
+        prompt = (
+            f"Sei Cipher. Hai appena controllato il calendario di Simone:\n\n"
+            f"{events_text}\n\n"
+            f"Data e ora attuale: {now_dt.strftime('%A %d %B %Y, %H:%M')}.\n"
+            f"C'è qualcosa che inizia entro i prossimi 60 minuti e richiede attenzione immediata? "
+            f"Considera solo eventi di OGGI, non quelli di domani o giorni successivi. "
+            f"Se sì, scrivi un messaggio breve (max 2 frasi, tono diretto, niente emoji). "
+            f"Non iniziare mai la risposta con 'sì' o 'no' — vai diretto al punto. "
+            f"Se no, rispondi solo: no."
+        )
+        try:
+            response = self._brain._call_llm_silent(prompt)
+        except Exception:
+            return
+
+        if not response or response.strip().lower() in ("no", "no.", ""):
+            return
+
+        # Passa per DiscretionEngine
+        if self._discretion:
+            ok, reason = self._discretion.should_send("calendar_reminder", response, urgency="normal")
+            if not ok:
+                console.print(f"[dim]🔇 Calendar reminder soppresso: {reason}[/dim]")
+                return
+            self._discretion.record_sent("calendar_reminder", response)
+
+        console.print("[dim]📅 Cipher: notifica calendario proattiva[/dim]")
+        if self._impact_tracker:
+            self._impact_tracker.log_action(
+                "calendar_reminder", response,
+                context=f"eventi: {events_text[:100]}"
+            )
+        self._notify(response)
+
+    # ── Morning brief ─────────────────────────────────────────────────
+
+    def _send_morning_brief(self) -> None:
+        """
+        Tra le 7:00 e le 8:00, invia a Simone:
+        - Il check del calendario (eventi di oggi imminenti)
+        - I documenti di preparazione preparati stanotte
+        Una volta sola al giorno.
+        """
+        now      = datetime.now()
+        today    = now.strftime("%Y-%m-%d")
+
+        # Solo nella finestra mattutina e non già inviato oggi
+        if not (MORNING_BRIEF_HOUR_START <= now.hour < MORNING_BRIEF_HOUR_END):
+            return
+        if self._morning_brief_sent_date == today:
+            return
+
+        # ── 1. Check calendario ───────────────────────────────────────────────
+        cal_msg = ""
+        try:
+            from modules.google_cal import GoogleCalendar
+            cal = GoogleCalendar()
+            events_text = cal.list_events(days=1, max_results=5)
+            if events_text and "Nessun evento" not in events_text and self._brain:
+                cal_prompt = (
+                    f"Sei Cipher. Questi sono gli eventi di oggi nel calendario di Simone:\n\n"
+                    f"{events_text}\n\n"
+                    f"Data e ora attuale: {now.strftime('%A %d %B %Y, %H:%M')}.\n"
+                    f"Se oggi è un giorno festivo (es. Venerdì Santo, Pasqua, Natale, Ferragosto, festività nazionale, ecc.), "
+                    f"fai gli auguri in modo naturale con il tuo carattere — senza essere stucchevole — "
+                    f"e NON segnalare impegni lavorativi o scolastici (Simone non lavora nei giorni festivi). "
+                    f"Se invece è un giorno normale, scrivi un messaggio di buongiorno con gli appuntamenti rilevanti, "
+                    f"segnalando quelli imminenti. "
+                    f"Max 3 frasi, tono diretto, niente emoji, niente 'sì/no' iniziali."
+                )
+                result = self._brain._call_llm_silent(cal_prompt)
+                if result and result.strip().lower() not in ("no", "no."):
+                    cal_msg = result.strip()
+        except Exception as e:
+            console.print(f"[dim]📅 Calendario non disponibile nel brief: {e}[/dim]")
+
+        # ── 2. Documenti di preparazione ──────────────────────────────────────
+        # Il cal_msg viene preposto al primo documento per evitare due saluti separati.
+        brief_file = Config.MEMORY_DIR / "morning_brief.json"
+        docs_sent = False
+        if brief_file.exists():
+            try:
+                brief = json.loads(brief_file.read_text(encoding="utf-8"))
+                if brief.get("date") == today and not brief.get("sent"):
+                    documents = brief.get("documents", [])
+                    first = True
+                    for doc in documents:
+                        doc_path = Config.HOME_DIR / doc.get("doc_name", "")
+                        if not doc_path.exists():
+                            continue
+                        content = doc_path.read_text(encoding="utf-8")
+                        if first and cal_msg:
+                            content = cal_msg + "\n\n" + content
+                            first = False
+                        message = content[:3900]
+                        if len(content) > 3900:
+                            message += "\n\n_(continua nel file)_"
+                        self._notify(message)
+                        docs_sent = True
+                    brief["sent"] = True
+                    brief_file.write_text(
+                        json.dumps(brief, ensure_ascii=False, indent=2),
+                        encoding="utf-8",
+                    )
+                    console.print(f"[green]📅 Morning brief inviato: {len(documents)} documento/i[/green]")
+            except Exception:
+                pass
+
+        # Nessun documento: manda il cal_msg da solo
+        if not docs_sent and cal_msg:
+            self._notify(cal_msg)
+
+        self._morning_brief_sent_date = today
 
     # ── Riflessione ───────────────────────────────────────────────────
 
@@ -410,8 +641,7 @@ class ConsciousnessLoop:
                 return self._exec_send_telegram(params, goal)
             elif action == "send_gmail":
                 return self._exec_send_gmail(params, goal)
-            elif action in ("read_gmail", "read_email"):
-                return self._exec_read_gmail(params, goal)
+
             elif action == "read_calendar":
                 return self._exec_read_calendar(params, goal)
             elif action == "self_reflect":
@@ -470,7 +700,9 @@ class ConsciousnessLoop:
             try:
                 message = self._brain._call_llm_silent(
                     f"Sei Cipher. Scrivi un messaggio breve a Simone via Telegram.\n"
-                    f"Motivo: {goal.get('description', '')}\nMax 2 frasi."
+                    f"Ora attuale: {datetime.now().strftime('%H:%M del %d/%m/%Y')}.\n"
+                    f"Motivo: {goal.get('description', '')}\nMax 2 frasi. "
+                    f"Tono naturale e diretto, niente emoji a meno che non siano nel contesto."
                 )
             except Exception:
                 return {"success": False, "error": "Impossibile generare messaggio."}
@@ -502,6 +734,7 @@ class ConsciousnessLoop:
             try:
                 message = self._brain._call_llm_silent(
                     f"Sei Cipher. Scrivi un messaggio email breve a Simone.\n"
+                    f"Ora attuale: {datetime.now().strftime('%H:%M del %d/%m/%Y')}.\n"
                     f"Motivo: {goal.get('description', '')}\nMax 2 frasi."
                 )
             except Exception:
@@ -519,18 +752,6 @@ class ConsciousnessLoop:
                 body=message,
             )
             return {"success": True, "output": "Email inviata.", "notify": False}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
-    def _exec_read_gmail(self, params: dict, goal: dict) -> dict:
-        try:
-            from modules.google_mail import GmailClient
-            gmail  = GmailClient()
-            emails = gmail.list_messages(max_results=3)
-            if not emails:
-                return {"success": True, "output": "Nessuna email recente.", "notify": False}
-            notify = goal.get("type") == "protect"
-            return {"success": True, "output": f"Lette {len(emails)} email recenti.", "notify": notify}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
@@ -718,7 +939,7 @@ class ConsciousnessLoop:
         self._consent_queue.append(goal)
         attempts = goal.get("consent_attempts", 1)
         message = (
-            f"🤔 Cipher chiede il tuo ok.\n"
+            f"Ti chiedo il permesso.\n"
             f"Obiettivo: {goal.get('title', '')}\n"
             f"{reason}\n"
             f"Rispondi con 'sì' o 'no'."

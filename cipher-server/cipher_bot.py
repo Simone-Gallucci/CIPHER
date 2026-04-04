@@ -36,7 +36,7 @@ load_dotenv()
 TELEGRAM_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "")
 ALLOWED_ID         = int(os.getenv("TELEGRAM_ALLOWED_ID", "0"))
 CIPHER_SERVER_URL  = os.getenv("CIPHER_SERVER_URL", "http://100.127.57.5:5000")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")
 VOSK_MODEL_PATH    = os.getenv("VOSK_MODEL_PATH", "model")
 
 UPLOADS_DIR = Path(__file__).parent / "uploads"
@@ -115,7 +115,7 @@ def _ask_claude_vision(image_bytes: bytes, caption: str) -> str:
 
     b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
     payload = {
-        "model": "anthropic/claude-sonnet-4-6",
+        "model": os.getenv("OPENROUTER_MODEL", "claude-sonnet-4-6") if os.getenv("ANTHROPIC_API_KEY") else "anthropic/claude-sonnet-4-6",
         "messages": [{
             "role": "user",
             "content": [
@@ -128,7 +128,7 @@ def _ask_claude_vision(image_bytes: bytes, caption: str) -> str:
     }
     try:
         resp = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            f"{os.getenv('LLM_BASE_URL', 'https://api.anthropic.com/v1' if os.getenv('ANTHROPIC_API_KEY') else 'https://openrouter.ai/api/v1')}/chat/completions",
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",

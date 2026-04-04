@@ -39,9 +39,10 @@ def _send_telegram(text: str) -> None:
 
 class Notifier:
     def __init__(self) -> None:
-        self._stop             = threading.Event()
+        self._stop                    = threading.Event()
         self._notified_events: set[str] = set()
-        self._calendar         = None
+        self._notified_events_date    = None
+        self._calendar                = None
 
         self._timers:     list[dict] = []
         self._timers_lock = threading.Lock()
@@ -102,6 +103,29 @@ class Notifier:
         except Exception as e:
             log.error("Errore restore promemoria: %s", e)
 
+    # ── Holiday check ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _is_italian_holiday(date: datetime) -> bool:
+        """True se `date` è una festività italiana (nazionali + Venerdì Santo + Pasquetta)."""
+        from datetime import timedelta
+        d, m, y = date.day, date.month, date.year
+        fixed = {(1,1),(6,1),(25,4),(1,5),(2,6),(15,8),(1,11),(8,12),(25,12),(26,12)}
+        if (d, m) in fixed:
+            return True
+        a = y % 19; b = y // 100; c = y % 100; dd = b // 4; e = b % 4
+        f = (b + 8) // 25; g = (b - f + 1) // 3; h = (19*a + b - dd - g + 15) % 30
+        i = c // 4; k = c % 4; l = (32 + 2*e + 2*i - h - k) % 7
+        mm = (a + 11*h + 22*l) // 451
+        em = (h + l - 7*mm + 114) // 31
+        ed = ((h + l - 7*mm + 114) % 31) + 1
+        easter = datetime(y, em, ed).replace(hour=0, minute=0, second=0, microsecond=0)
+        check  = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        return check in (easter - timedelta(days=2), easter, easter + timedelta(days=1))
+
+    # Rosso (Tomato) = professionale → da saltare nei festivi
+    _PROFESSIONAL_COLOR_IDS = {"11"}
+
     # ── Calendar lazy ─────────────────────────────────────────────────
 
     def _get_calendar(self):
@@ -113,6 +137,10 @@ class Notifier:
     # ── Calendar loop ─────────────────────────────────────────────────
 
     def _check_calendar(self) -> None:
+        today = datetime.now().date()
+        if self._notified_events_date != today:
+            self._notified_events.clear()
+            self._notified_events_date = today
         try:
             calendar = self._get_calendar()
             now      = datetime.now(timezone.utc)
@@ -137,7 +165,11 @@ class Notifier:
                 except Exception:
                     continue
                 minutes_left = int((start_dt - now).total_seconds() / 60)
-                if 0 <= minutes_left <= EVENT_ADVANCE_MINUTES:
+                if 0 <= minutes_left <= EVENT_ADVANCE_MINUTES and datetime.now().hour >= 9:
+                    color_id = event.get("colorId", "")
+                    if self._is_italian_holiday(datetime.now()) and color_id in self._PROFESSIONAL_COLOR_IDS:
+                        log.info("Festivo: evento professionale saltato: %s", event.get("summary", ""))
+                        continue
                     self._notified_events.add(event_id)
                     title    = event.get("summary", "(senza titolo)")
                     location = event.get("location", "")
@@ -244,7 +276,11 @@ class Notifier:
         with self._timers_lock:
             return list(self._timers)
 
-    def cancel_timer(self, timer_id: int) -> bool:
+    def cancel_timer(self, timer_id) -> bool:
+        try:
+            timer_id = int(timer_id)
+        except (TypeError, ValueError):
+            return False
         with self._timers_lock:
             target = next((t for t in self._timers if t["id"] == timer_id), None)
             if target is None:

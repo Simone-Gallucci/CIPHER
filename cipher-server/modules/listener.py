@@ -174,6 +174,10 @@ class Listener:
             self._model_it, Config.SAMPLE_RATE,
             json.dumps(self._wake_words_it + ["[unk]"])
         )
+        rec_en = KaldiRecognizer(
+            self._model_en, Config.SAMPLE_RATE,
+            json.dumps(self._wake_words_en + ["[unk]"])
+        ) if self._wake_rec_en else None
         chunk_size = 4000 * 2
         for i in range(0, len(audio_bytes), chunk_size):
             chunk = audio_bytes[i:i + chunk_size]
@@ -183,11 +187,7 @@ class Listener:
                 text = json.loads(rec_it.PartialResult()).get("partial", "").lower()
             if any(w in text for w in self._wake_words_it):
                 return True
-            if self._wake_rec_en:
-                rec_en = KaldiRecognizer(
-                    self._model_en, Config.SAMPLE_RATE,
-                    json.dumps(self._wake_words_en + ["[unk]"])
-                )
+            if rec_en:
                 if rec_en.AcceptWaveform(chunk):
                     text_en = json.loads(rec_en.Result()).get("text", "").lower()
                 else:

@@ -48,10 +48,13 @@ def init_brain():
     brain._dispatcher.set_llm_silent(brain._call_llm_silent)
 
     # ── Avvia la coscienza autonoma ───────────────────────────────────
-    from modules.consciousness_loop import ConsciousnessLoop
-    consciousness = ConsciousnessLoop(brain=brain, voice=voice)
-    brain._consciousness = consciousness
-    consciousness.start()
+    if Config.CONSCIOUSNESS_ENABLED:
+        from modules.consciousness_loop import ConsciousnessLoop
+        consciousness = ConsciousnessLoop(brain=brain, voice=voice)
+        brain._consciousness = consciousness
+        consciousness.start()
+    else:
+        console.print("[yellow]⚠️  Coscienza autonoma disabilitata (CONSCIOUSNESS_ENABLED=false)[/yellow]")
 
     # ── Collega i callback Telegram → Brain ───────────────────────────
 
@@ -124,6 +127,7 @@ def health():
 
 @app.route("/chat", methods=["POST"])
 def chat():
+    import time as _time
     data    = request.get_json(silent=True) or {}
     message = data.get("message", "").strip()
     if not message:
@@ -131,7 +135,9 @@ def chat():
     try:
         if consciousness:
             consciousness.notify_interaction()
+        _t0 = _time.time()
         response = brain.think(message)
+        console.print(f"[dim]⏱ chat: {_time.time() - _t0:.1f}s[/dim]")
         return jsonify({"response": response})
     except Exception as e:
         import traceback

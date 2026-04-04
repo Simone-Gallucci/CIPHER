@@ -11,10 +11,16 @@ load_dotenv(Path(__file__).parent / ".env", override=True)
 
 
 class Config:
-    # ── OpenRouter ───────────────────────────────────────────
-    OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-    OPENROUTER_MODEL: str   = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4-6")
-    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    # ── LLM Provider ─────────────────────────────────────────
+    # Cambia LLM_PROVIDER nel .env per switchare provider:
+    #   LLM_PROVIDER=openrouter  → usa OpenRouter (nessun rate limit TPM)
+    #   LLM_PROVIDER=anthropic   → usa Anthropic diretto (Tier 2/3)
+    _provider: str = os.getenv("LLM_PROVIDER", "openrouter").lower()
+
+    OPENROUTER_API_KEY: str  = os.getenv("ANTHROPIC_API_KEY") if _provider == "anthropic" else os.getenv("OPENROUTER_API_KEY", "")
+    OPENROUTER_BASE_URL: str = "https://api.anthropic.com/v1" if _provider == "anthropic" else "https://openrouter.ai/api/v1"
+    _model_raw: str          = os.getenv("OPENROUTER_MODEL", "claude-sonnet-4-6" if _provider == "anthropic" else "anthropic/claude-sonnet-4-6")
+    OPENROUTER_MODEL: str    = _model_raw.replace("anthropic/", "") if _provider == "anthropic" else _model_raw
 
     # ── Telegram ─────────────────────────────────────────────────────────
     TELEGRAM_BOT_TOKEN:  str = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -56,6 +62,13 @@ class Config:
     GREEN_API_INSTANCE_ID: str = os.getenv("GREEN_API_INSTANCE_ID", "")
     GREEN_API_TOKEN:       str = os.getenv("GREEN_API_TOKEN", "")
 
+    # ── Contesto real-time ───────────────────────────────────
+    WEATHER_CITY: str = os.getenv("WEATHER_CITY", "Rome")
+
+    # ── Modello background (task silenti: estrazione, classificazione) ──
+    _bg_model_raw: str    = os.getenv("BACKGROUND_MODEL", "claude-haiku-4-5-20251001" if _provider == "anthropic" else "anthropic/claude-haiku-4-5")
+    BACKGROUND_MODEL: str = _bg_model_raw.replace("anthropic/", "") if _provider == "anthropic" else _bg_model_raw
+
     # ── Google OAuth2 ─────────────────────────────────────
     GOOGLE_CREDENTIALS_FILE: str = os.getenv(
         "GOOGLE_CREDENTIALS_FILE",
@@ -77,7 +90,10 @@ class Config:
     MODELS_DIR: Path = BASE_DIR / "models"
 
     # ── Limiti conversazione ─────────────────────────────────
-    MAX_HISTORY_MESSAGES: int = 20
+    MAX_HISTORY_MESSAGES: int = 10
+
+    # ── Feature flags ────────────────────────────────────────
+    CONSCIOUSNESS_ENABLED: bool = os.getenv("CONSCIOUSNESS_ENABLED", "true").lower() != "false"
 
     @classmethod
     def validate(cls) -> list[str]:

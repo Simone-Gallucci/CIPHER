@@ -23,14 +23,6 @@ console = Console()
 
 CYCLE_INTERVAL  = 10 * 60   # Ciclo principale ogni 10 minuti
 NEWS_INTERVAL   = 30 * 60   # News ogni 30 minuti
-EMAIL_INTERVAL  = 20 * 60   # Check email urgenti ogni 20 minuti
-
-# Parole chiave che classificano un'email come urgente
-URGENT_KEYWORDS = [
-    "urgente", "urgent", "asap", "importante", "scadenza", "deadline",
-    "fattura", "pagamento", "conferma", "convocazione", "emergenza",
-    "immediato", "entro oggi", "entro domani", "risposta richiesta",
-]
 
 
 class PassiveMonitor:
@@ -51,7 +43,6 @@ class PassiveMonitor:
         self._running        = False
         self._thread         = None
         self._last_news_ts   = 0.0
-        self._last_email_ts  = 0.0
         self._notified_today: set = set()
 
     # ── Avvio / Stop ──────────────────────────────────────────────────
@@ -74,11 +65,6 @@ class PassiveMonitor:
     def _loop(self):
         time.sleep(90)   # Attendi avvio stabile del server
         while self._running:
-            try:
-                self._check_upcoming_events()
-            except Exception as e:
-                console.print(f"[red]PassiveMonitor eventi: {e}[/red]")
-
             now = time.time()
             if now - self._last_news_ts >= NEWS_INTERVAL:
                 try:
@@ -87,13 +73,6 @@ class PassiveMonitor:
                 except Exception as e:
                     console.print(f"[red]PassiveMonitor news: {e}[/red]")
 
-            if now - self._last_email_ts >= EMAIL_INTERVAL:
-                try:
-                    self._check_urgent_emails()
-                    self._last_email_ts = now
-                except Exception as e:
-                    console.print(f"[red]PassiveMonitor email: {e}[/red]")
-
             # Reset giornaliero dei deduplicati
             today_key = datetime.now().strftime("%Y%m%d")
             if getattr(self, "_today_key", None) != today_key:
@@ -101,86 +80,6 @@ class PassiveMonitor:
                 self._today_key = today_key
 
             time.sleep(CYCLE_INTERVAL)
-
-    # ── Check eventi imminenti ────────────────────────────────────────
-
-    def _check_upcoming_events(self):
-        """Notifica eventi calendario tra 1h e 2h, una volta sola."""
-        try:
-            from modules.google_cal import GoogleCalendar
-            cal    = GoogleCalendar()
-            events = cal.list_events(max_results=5)
-            now    = datetime.now()
-
-            for event in events:
-                start_str = event.get("start", {}).get("dateTime", "")
-                if not start_str:
-                    continue
-                try:
-                    start_dt = datetime.fromisoformat(
-                        start_str.replace("Z", "+00:00")
-                    ).replace(tzinfo=None)
-                except Exception:
-                    continue
-
-                delta    = (start_dt - now).total_seconds()
-                event_id = event.get("id", start_str)
-
-                if 3600 <= delta <= 7200 and event_id not in self._notified_today:
-                    title   = event.get("summary", "Evento")
-                    h       = int(delta // 3600)
-                    m       = int((delta % 3600) // 60)
-                    message = f"⏰ Tra {h}h {m}min: {title}"
-                    self._emit(message, action_type="reminder", context=f"evento: {title}")
-                    self._notified_today.add(event_id)
-                    console.print(f"[dim]📅 Promemoria anticipato: {title}[/dim]")
-        except Exception:
-            pass   # Google Calendar potrebbe non essere disponibile
-
-    # ── Check email urgenti ───────────────────────────────────────────
-
-    def _check_urgent_emails(self):
-        """
-        Controlla le ultime email non lette.
-        Segnala solo quelle che contengono parole chiave di urgenza.
-        """
-        email_key = f"email_{datetime.now().strftime('%Y%m%d_%H')}"
-        if email_key in self._notified_today:
-            return
-
-        try:
-            from modules.google_mail import GmailClient
-            gmail  = GmailClient()
-            emails = gmail.list_messages(max_results=5, unread_only=True)
-            if not emails:
-                return
-
-            urgent_found = []
-            for email in emails:
-                subject = email.get("subject", "").lower()
-                snippet = email.get("snippet", "").lower()
-                text    = subject + " " + snippet
-                if any(kw in text for kw in URGENT_KEYWORDS):
-                    urgent_found.append(
-                        email.get("subject", "(senza oggetto)") or "(senza oggetto)"
-                    )
-
-            if not urgent_found:
-                return
-
-            subjects = "\n".join(f"  • {s}" for s in urgent_found[:3])
-            message  = f"📧 Email urgenti non lette ({len(urgent_found)}):\n{subjects}"
-            self._emit(
-                message,
-                action_type="proactive_message",
-                urgency="urgent",
-                context="email urgenti",
-            )
-            self._notified_today.add(email_key)
-            console.print(f"[dim]📧 Segnalate {len(urgent_found)} email urgenti[/dim]")
-
-        except Exception:
-            pass   # Gmail potrebbe non essere disponibile
 
     # ── Check notizie su interessi di Cipher ─────────────────────────
 

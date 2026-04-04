@@ -55,7 +55,7 @@ class Memory:
     def update_profile(self, key: str, value: str, category: str = "personal") -> None:
         if category not in self._profile:
             self._profile[category] = {}
-        if category in ("personal", "preferences"):
+        if category in ("personal", "preferences", "habits"):
             self._profile[category][key] = value
         elif category == "facts":
             fact = f"{key}: {value}" if key else value
@@ -138,28 +138,20 @@ class Memory:
     def build_context(self) -> str:
         parts = []
 
-        # 1. Comportamento (massima priorità — influenza come risponde)
-        behavior = self._load_behavior_files()
-        if behavior:
-            parts.append(behavior)
-
-        # 2. Profilo utente
+        # 1. Profilo utente
         profile_lines = []
         for k, v in self._profile.get("personal", {}).items():
             profile_lines.append(f"  - {k}: {v}")
         for k, v in self._profile.get("preferences", {}).items():
             profile_lines.append(f"  - preferenza {k}: {v}")
+        for k, v in self._profile.get("habits", {}).items():
+            profile_lines.append(f"  - abitudine {k}: {v}")
         for f in self._profile.get("facts", []):
             profile_lines.append(f"  - {f}")
         if profile_lines:
             parts.append("PROFILO UTENTE:\n" + "\n".join(profile_lines))
 
-        # 3. Conoscenza appresa dai file
-        learning = self._load_learning_files()
-        if learning:
-            parts.append(learning)
-
-        # 4. Conversazioni passate — ultimi 50 messaggi completi
+        # 3. Conversazioni passate — ultimi 50 messaggi completi
         past_files = [f for f in sorted(CONV_DIR.glob("*.json")) if f != self._session_file]
         if past_files:
             all_messages = []
@@ -199,10 +191,12 @@ class Memory:
             return
         prompt = (
             f'Analizza questo messaggio e decidi se contiene informazioni personali '
-            f'importanti da ricordare (nome, età, lavoro, città, preferenze).\n\n'
+            f'importanti da ricordare (nome, età, lavoro, città, preferenze, '
+            f'abitudini quotidiane, routine, orari abituali, attività ricorrenti).\n\n'
             f'Messaggio: "{text}"\n\n'
             f'Se contiene info, rispondi SOLO con JSON:\n'
-            f'{{"save": [{{"category": "personal|preferences|facts", "key": "campo", "value": "valore"}}]}}\n'
+            f'{{"save": [{{"category": "personal|preferences|facts|habits", "key": "campo", "value": "valore"}}]}}\n'
+            f'Usa category "habits" per abitudini e routine (es. key: "palestra", value: "ogni mattina alle 7").\n'
             f'Altrimenti: {{"save": []}}\nNessuna spiegazione.'
         )
         try:
@@ -214,8 +208,8 @@ class Memory:
             for item in data.get("save", []):
                 if item.get("value"):
                     self.update_profile(item.get("key", ""), item["value"], item.get("category", "facts"))
-        except Exception:
-            pass
+        except Exception as e:
+            console.print(f"[dim]Memory extract warning: {e}[/dim]")
 
     def handle_remember_command(self, text: str) -> Optional[str]:
         patterns = [

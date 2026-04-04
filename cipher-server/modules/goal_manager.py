@@ -59,7 +59,7 @@ Rispondi SOLO con un JSON valido, senza markdown, senza backtick, senza testo ag
       "type": "explore|protect|task|observe|reflect",
       "title": "titolo breve",
       "description": "cosa vuoi fare e perché, in prima persona, 1-2 frasi",
-      "action": "web_search|send_telegram|read_gmail|read_calendar|self_reflect|write_memory",
+      "action": "web_search|send_telegram|read_calendar|self_reflect|write_memory",
       "action_params": {{"query": "..." }},
       "priority": 1,
       "created_at": "{now}"
@@ -210,7 +210,7 @@ class GoalManager:
 
         try:
             response = self._client.chat.completions.create(
-                model="anthropic/claude-haiku-4-5",
+                model=Config.BACKGROUND_MODEL,
                 max_tokens=512,
                 messages=[{"role": "user", "content": prompt}],
                 extra_headers={"X-Title": "Cipher Goal Manager"},

@@ -131,7 +131,7 @@ class SelfReflection:
 
     # ── Core riflessione ──────────────────────────────────────────────
 
-    def reflect(self, memory_context: str = "", goals_context: str = "") -> dict:
+    def reflect(self, memory_context: str = "", goals_context: str = "", consciousness=None) -> dict:
         """
         Esegue un ciclo di auto-riflessione.
         Ritorna il risultato della riflessione come dict.
@@ -166,7 +166,7 @@ class SelfReflection:
 
         try:
             response = self._client.chat.completions.create(
-                model="anthropic/claude-haiku-4-5",
+                model=Config.BACKGROUND_MODEL,
                 max_tokens=512,
                 messages=[{"role": "user", "content": prompt}],
                 extra_headers={"X-Title": "Cipher Self-Reflection"},
