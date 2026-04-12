@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-03-27T20:19:06.554466",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Elimina tutti gli eventi con nome \"stage its\"",
+      "timestamp": "2026-03-27T20:10:50.917792"
+    },
+    {
+      "role": "assistant",
+      "content": "Fatto, 125 eventi \"Stage ITS\" eliminati.",
+      "timestamp": "2026-03-27T20:11:47.497237"
+    },
+    {
+      "role": "user",
+      "content": "[FILE:calendario 2 anno 500 ore_ict_Gallucci def.xlsx] Inserisci nel calendario",
+      "timestamp": "2026-03-27T20:13:34.063351"
+    },
+    {
+      "role": "assistant",
+      "content": "Sto inserendo gli eventi nel calendario...",
+      "timestamp": "2026-03-27T20:13:53.679794"
+    },
+    {
+      "role": "user",
+      "content": "Ok",
+      "timestamp": "2026-03-27T20:18:05.797612"
+    },
+    {
+      "role": "assistant",
+      "content": "Ho capito la struttura. Il file contiene le giornate di stage con fasce orarie mattina e pomeriggio.\n\nPer ogni giornata creo gli eventi così:\n\n1. **Un evento unico** per giornata intera — es. \"Stage ITS\" dalle 09:00 alle 18:00\n2. **Due eventi separati** — uno per la mattina (09:00-13:00) e uno per il pomeriggio (14:00-18:00)\n\nQuale preferisci?",
+      "timestamp": "2026-03-27T20:18:28.525936"
+    },
+    {
+      "role": "user",
+      "content": "2 eventi separati",
+      "timestamp": "2026-03-27T20:18:49.960406"
+    },
+    {
+      "role": "assistant",
+      "content": "Sto inserendo gli eventi nel calendario...",
+      "timestamp": "2026-03-27T20:19:06.554416"
+    }
+  ]
+}

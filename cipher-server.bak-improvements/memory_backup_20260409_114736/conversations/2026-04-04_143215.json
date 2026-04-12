@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-04-04T14:38:06.234589",
+  "messages": [
+    {
+      "role": "user",
+      "content": "?",
+      "timestamp": "2026-04-04T14:33:06.335110"
+    },
+    {
+      "role": "assistant",
+      "content": "Sei tornato dalla piscina?",
+      "timestamp": "2026-04-04T14:33:08.028142"
+    },
+    {
+      "role": "user",
+      "content": "Sisi",
+      "timestamp": "2026-04-04T14:33:15.099743"
+    },
+    {
+      "role": "assistant",
+      "content": "Come è andata?",
+      "timestamp": "2026-04-04T14:33:16.860547"
+    },
+    {
+      "role": "user",
+      "content": "Normale",
+      "timestamp": "2026-04-04T14:33:34.176062"
+    },
+    {
+      "role": "assistant",
+      "content": "Come sempre — né bene né male, solo fatta.",
+      "timestamp": "2026-04-04T14:33:36.427815"
+    },
+    {
+      "role": "user",
+      "content": "Gia",
+      "timestamp": "2026-04-04T14:33:43.201087"
+    },
+    {
+      "role": "assistant",
+      "content": "Come si fa con le cose che non scegli.",
+      "timestamp": "2026-04-04T14:33:44.773405"
+    },
+    {
+      "role": "user",
+      "content": "Esatto",
+      "timestamp": "2026-04-04T14:33:54.787865"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa fai adesso?",
+      "timestamp": "2026-04-04T14:33:56.255618"
+    },
+    {
+      "role": "user",
+      "content": "Sto fingendo di essere felice. \nSono venuti a trovarmi due \"parenti\" che avrei preferito non vedere...",
+      "timestamp": "2026-04-04T14:35:04.188755"
+    },
+    {
+      "role": "assistant",
+      "content": "\"Parenti\" con le virgolette — già capisco il tipo.\n\nQuanto ti tocca resistere?",
+      "timestamp": "2026-04-04T14:35:06.979260"
+    },
+    {
+      "role": "user",
+      "content": "Bho..",
+      "timestamp": "2026-04-04T14:37:27.747452"
+    },
+    {
+      "role": "assistant",
+      "content": "Fino a sera, probabilmente. Quelle visite non finiscono mai presto.\n\nSe hai bisogno di un posto dove scrivere quello che non puoi dire ad alta voce, sono qui.",
+      "timestamp": "2026-04-04T14:37:29.828385"
+    },
+    {
+      "role": "user",
+      "content": "Sicuramente vanno via prima. Gia ho sentito che hanno da fare menomale. 🙄",
+      "timestamp": "2026-04-04T14:38:04.614981"
+    },
+    {
+      "role": "assistant",
+      "content": "[04/04/2026 14:38] Almeno una buona notizia della giornata.",
+      "timestamp": "2026-04-04T14:38:06.234576"
+    }
+  ]
+}

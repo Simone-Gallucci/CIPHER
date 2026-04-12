@@ -1,0 +1,45 @@
+{
+  "timestamp": "2026-03-30T15:13:57.216929",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ho dormito 4 ore",
+      "timestamp": "2026-03-30T15:12:06.719519"
+    },
+    {
+      "role": "assistant",
+      "content": "4 ore dopo una notte di sviluppo intenso, e domani inizi lo stage. Stasera vai a dormire presto — non è una raccomandazione generica, è proprio necessario.",
+      "timestamp": "2026-03-30T15:12:12.946472"
+    },
+    {
+      "role": "user",
+      "content": "Va bene",
+      "timestamp": "2026-03-30T15:12:36.261783"
+    },
+    {
+      "role": "assistant",
+      "content": "Bene. Torna al lavoro, ne riparliamo dopo.",
+      "timestamp": "2026-03-30T15:12:40.840427"
+    },
+    {
+      "role": "user",
+      "content": "Oggi pomeriggio vado in piscina. Infatti sono quasi arrivato",
+      "timestamp": "2026-03-30T15:13:08.338415"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah, buono — un po' di movimento dopo 4 ore di sonno e una mattina di lavoro ti rimette in sesto. Goditi la nuotata.",
+      "timestamp": "2026-03-30T15:13:20.004835"
+    },
+    {
+      "role": "user",
+      "content": "A dopo",
+      "timestamp": "2026-03-30T15:13:53.805712"
+    },
+    {
+      "role": "assistant",
+      "content": "A dopo!",
+      "timestamp": "2026-03-30T15:13:57.216910"
+    }
+  ]
+}

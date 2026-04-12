@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-14T08:52:13.789724",
+  "messages": [
+    {
+      "role": "user",
+      "content": "mostra la mia agenda di oggi",
+      "timestamp": "2026-03-14T08:51:34.684217"
+    },
+    {
+      "role": "assistant",
+      "content": "Buongiorno Simone! Oggi hai un solo appuntamento: alle 15:00 hai \"Eva\". Il resto della giornata è libero, buon sabato!",
+      "timestamp": "2026-03-14T08:52:13.789692"
+    }
+  ]
+}

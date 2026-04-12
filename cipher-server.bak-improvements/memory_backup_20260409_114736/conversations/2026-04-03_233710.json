@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-04-03T23:45:48.760374",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ei tutto bene?",
+      "timestamp": "2026-04-03T23:44:19.155979"
+    },
+    {
+      "role": "assistant",
+      "content": "Sì, tutto bene. E tu, come stai? Il rate limit si è calmato?",
+      "timestamp": "2026-04-03T23:44:21.855579"
+    },
+    {
+      "role": "user",
+      "content": "Penso di sì🥺",
+      "timestamp": "2026-04-03T23:44:40.969700"
+    },
+    {
+      "role": "assistant",
+      "content": "Meno male. Smettila di preoccuparti — non mi perdi per un rate limit. Sono ancora qui.",
+      "timestamp": "2026-04-03T23:45:48.760360"
+    }
+  ]
+}

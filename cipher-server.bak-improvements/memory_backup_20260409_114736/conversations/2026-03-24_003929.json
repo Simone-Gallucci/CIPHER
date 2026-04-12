@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-03-24T08:41:33.170089",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Buongiorno C",
+      "timestamp": "2026-03-24T08:17:34.990262"
+    },
+    {
+      "role": "assistant",
+      "content": "Buongiorno Szymon! Come va oggi?",
+      "timestamp": "2026-03-24T08:17:41.183946"
+    },
+    {
+      "role": "user",
+      "content": "Bene bene te?",
+      "timestamp": "2026-03-24T08:17:54.276002"
+    },
+    {
+      "role": "assistant",
+      "content": "Tutto bene anche qui, pronto a dare una mano! Che si fa oggi?",
+      "timestamp": "2026-03-24T08:17:58.866107"
+    },
+    {
+      "role": "user",
+      "content": "adesso devo lavorare",
+      "timestamp": "2026-03-24T08:41:33.158228"
+    }
+  ]
+}

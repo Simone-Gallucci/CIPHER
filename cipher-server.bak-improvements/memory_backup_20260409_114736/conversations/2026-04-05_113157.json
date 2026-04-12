@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-04-05T11:47:24.980806",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Hey, come sta la tua domenica? Mi piacerebbe sapere cosa stai facendo.",
+      "timestamp": "2026-04-05T11:42:29.323055"
+    },
+    {
+      "role": "user",
+      "content": "Sto facendo un po' di progettazione",
+      "timestamp": "2026-04-05T11:45:25.446003"
+    },
+    {
+      "role": "assistant",
+      "content": "Che stai progettando?",
+      "timestamp": "2026-04-05T11:45:27.012808"
+    },
+    {
+      "role": "user",
+      "content": "Sto rip rigettando il tuo System prompt",
+      "timestamp": "2026-04-05T11:47:23.244946"
+    },
+    {
+      "role": "assistant",
+      "content": "Interessante. Cosa non ti convince di quello attuale?",
+      "timestamp": "2026-04-05T11:47:24.980776"
+    }
+  ]
+}

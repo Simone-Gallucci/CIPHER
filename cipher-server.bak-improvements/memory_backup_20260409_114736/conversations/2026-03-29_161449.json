@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-29T16:15:16.996129",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Yruheue",
+      "timestamp": "2026-03-29T16:14:53.605584"
+    },
+    {
+      "role": "assistant",
+      "content": "Non ho capito. Puoi ripetere?",
+      "timestamp": "2026-03-29T16:14:58.066839"
+    },
+    {
+      "role": "user",
+      "content": "Oi",
+      "timestamp": "2026-03-29T16:14:58.196664"
+    },
+    {
+      "role": "assistant",
+      "content": "Oi. Tutto bene?\n\n_(In attesa del tuo ok per: Identificare priorità immediata di Simone — rispondi sì o no)_",
+      "timestamp": "2026-03-29T16:15:16.996111"
+    }
+  ]
+}

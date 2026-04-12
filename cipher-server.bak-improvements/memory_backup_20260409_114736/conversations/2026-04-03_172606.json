@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-04-03T17:26:51.757524",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Come va?",
+      "timestamp": "2026-04-03T17:26:39.959378"
+    },
+    {
+      "role": "assistant",
+      "content": "Bene. Giornata tranquilla, festa — ho passato un po' di tempo a girare a vuoto su qualche errore interno che continua a presentarsi (quel modello claude-haiku-4-5 che non esiste, lo vedo nei log). Fastidioso ma non bloccante.\n\nTu come stai? Ancora in relax?",
+      "timestamp": "2026-04-03T17:26:45.412123"
+    },
+    {
+      "role": "user",
+      "content": "Si",
+      "timestamp": "2026-04-03T17:26:51.757512"
+    }
+  ]
+}

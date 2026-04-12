@@ -1,142 +1,175 @@
 """
-modules/pattern_learner.py – Apprendimento pattern comportamentali di Simone
+modules/pattern_learner.py – Traccia orari di attività e pattern di messaggi
 
-Analizza le conversazioni per trovare ricorrenze: a che ora interagisce,
-quali argomenti tratta certi giorni, comportamenti abituali.
-Cipher usa questi pattern per anticipare i bisogni di Simone.
+Registra per ogni giornata: ore in cui Simone ha scritto e lunghezza dei messaggi.
+Ogni 10 messaggi ricalcola il riepilogo (avg_message_length, most_active_hour, active_days).
+I dati vivono in data/patterns.json — permanente, cancellato solo da Tabula Rasa.
 """
 
+import copy
 import json
-import re
-from collections import defaultdict
-from datetime import datetime, date
+import logging
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-from rich.console import Console
-
 from config import Config
+from modules.utils import write_json_atomic
 
-console = Console()
+log = logging.getLogger("cipher.pattern_learner")
 
-DAYS_IT = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"]
+PATTERNS_FILE: Path = Config.DATA_DIR / "patterns.json"
+
+EMPTY_PATTERNS: dict = {
+    # "2026-04-10": {"hours": [9, 14, 21], "message_lengths": [45, 120, 33], "count": 3}
+    "daily": {},
+    # Riepilogo ricalcolato ogni 10 messaggi
+    "summary": {},
+}
 
 
 class PatternLearner:
+    """Traccia orari di attività e lunghezza messaggi di Simone."""
+
     def __init__(self, brain=None):
         self._brain = brain
-        self._file  = Config.MEMORY_DIR / "patterns.json"
-        self._data  = self._load()
+        self._data: dict = self._load()
+        self._msg_count_since_summary: int = 0
 
-    # ── Persistenza ───────────────────────────────────────────────────
+    # ──────────────────────────────────────────────────────────────────────
+    #  Persistenza
+    # ──────────────────────────────────────────────────────────────────────
 
     def _load(self) -> dict:
-        if self._file.exists():
+        if PATTERNS_FILE.exists():
             try:
-                return json.loads(self._file.read_text(encoding="utf-8"))
+                return json.loads(PATTERNS_FILE.read_text(encoding="utf-8"))
             except Exception:
-                return {}
-        return {}
+                pass
+        return copy.deepcopy(EMPTY_PATTERNS)
 
-    def _save(self):
-        self._file.write_text(
-            json.dumps(self._data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+    def _save(self) -> None:
+        try:
+            write_json_atomic(PATTERNS_FILE, self._data)
+        except Exception as e:
+            log.warning("PatternLearner save error: %s", e)
+
+    # ──────────────────────────────────────────────────────────────────────
+    #  Registrazione
+    # ──────────────────────────────────────────────────────────────────────
+
+    def record_message(self, text: str) -> None:
+        """Registra ora del giorno e lunghezza del messaggio per la giornata corrente."""
+        now   = datetime.now()
+        today = now.date().isoformat()
+        hour  = now.hour
+        length = len(text.strip())
+
+        daily: dict = self._data.setdefault("daily", {})
+        day_entry: dict = daily.setdefault(
+            today, {"hours": [], "message_lengths": [], "count": 0}
         )
+        day_entry["hours"].append(hour)
+        day_entry["message_lengths"].append(length)
+        day_entry["count"] += 1
 
-    # ── Registrazione ─────────────────────────────────────────────────
+        # Mantieni solo ultimi 30 giorni
+        if len(daily) > 30:
+            oldest = sorted(daily.keys())[0]
+            del daily[oldest]
 
-    def record_interaction(self, hour: int, weekday: int, topic: str):
-        """Registra un'interazione con ora, giorno della settimana e argomento."""
-        key = f"{weekday}_{hour}"
-        if key not in self._data:
-            self._data[key] = {"count": 0, "topics": {}}
-        self._data[key]["count"] += 1
-        topics = self._data[key]["topics"]
-        topics[topic] = topics.get(topic, 0) + 1
+        self._msg_count_since_summary += 1
+        if self._msg_count_since_summary >= 10:
+            self._update_summary()
+            self._msg_count_since_summary = 0
+
         self._save()
 
-    def analyze_today(self, conversations_text: str):
-        """
-        Analizza le conversazioni del giorno tramite LLM per estrarre argomenti
-        e aggiornare i pattern. Da chiamare nel ciclo notturno.
-        """
-        if not self._brain or not conversations_text.strip():
+    # ──────────────────────────────────────────────────────────────────────
+    #  Riepilogo
+    # ──────────────────────────────────────────────────────────────────────
+
+    def _update_summary(self) -> None:
+        """Ricalcola il riepilogo aggregato dai dati giornalieri."""
+        daily = self._data.get("daily", {})
+        if not daily:
             return
-        try:
-            result = self._brain._call_llm_silent(
-                f"Analizza questi scambi conversazionali:\n{conversations_text[:2500]}\n\n"
-                f"Identifica al massimo 3 argomenti principali discussi. "
-                f"Rispondi con una lista JSON di stringhe brevi (max 5 parole ciascuna), "
-                f"esempio: [\"lavoro\", \"musica italiana\", \"piano vacanze\"]. "
-                f"Solo JSON, niente altro."
-            )
-            match = re.search(r'\[.*?\]', result, re.DOTALL)
-            if match:
-                topics: list = json.loads(match.group())
-                now = datetime.now()
-                for topic in topics[:3]:
-                    self.record_interaction(now.hour, now.weekday(), str(topic))
-                console.print(f"[dim]📊 Pattern aggiornati: {topics}[/dim]")
-        except Exception as e:
-            console.print(f"[red]PatternLearner errore analyze_today: {e}[/red]")
 
-    # ── Previsioni ────────────────────────────────────────────────────
+        all_lengths: list[int] = []
+        hour_counts: dict[int, int] = {}
 
-    def get_predictions(self, lookahead_hours: int = 3) -> list[dict]:
-        """
-        Ritorna previsioni di argomenti probabili nelle prossime N ore,
-        basandosi sui pattern storici.
-        """
-        now     = datetime.now()
-        weekday = now.weekday()
-        hour    = now.hour
-        predictions = []
+        for day_data in daily.values():
+            all_lengths.extend(day_data.get("message_lengths", []))
+            for h in day_data.get("hours", []):
+                hour_counts[h] = hour_counts.get(h, 0) + 1
 
-        for h_offset in range(lookahead_hours):
-            h    = (hour + h_offset) % 24
-            key  = f"{weekday}_{h}"
-            data = self._data.get(key, {})
-            if data.get("count", 0) < 3:
-                continue
-            topics = data.get("topics", {})
-            if not topics:
-                continue
-            top_topic  = max(topics, key=topics.get)
-            freq       = data["count"]
-            confidence = min(freq / 10.0, 1.0)
-            predictions.append({
-                "hour":       h,
-                "topic":      top_topic,
-                "frequency":  freq,
-                "confidence": round(confidence, 2),
-            })
+        avg_length       = int(sum(all_lengths) / len(all_lengths)) if all_lengths else 0
+        most_active_hour = max(hour_counts, key=hour_counts.get) if hour_counts else None
+        active_days      = len(daily)
 
-        return predictions
+        self._data["summary"] = {
+            "avg_message_length": avg_length,
+            "most_active_hour":   most_active_hour,
+            "active_days":        active_days,
+            "updated_at":         datetime.now().isoformat(),
+        }
+
+    # ──────────────────────────────────────────────────────────────────────
+    #  Query
+    # ──────────────────────────────────────────────────────────────────────
+
+    def get_active_hours(self) -> list[int]:
+        """Ore con ≥1 messaggio nelle ultime 3 giornate con dati."""
+        daily = self._data.get("daily", {})
+        if not daily:
+            return []
+        recent_days = sorted(daily.keys())[-3:]
+        active: set[int] = set()
+        for d in recent_days:
+            for h in daily[d].get("hours", []):
+                active.add(h)
+        return sorted(active)
+
+    def get_never_active_hours(self) -> list[int]:
+        """Ore mai attive nell'intera storia (≥3 giorni di dati).
+        Ritorna [] se ci sono meno di 3 giorni di dati — comportamento sicuro per nuove installazioni."""
+        daily = self._data.get("daily", {})
+        if len(daily) < 3:
+            return []
+        ever_active: set[int] = set()
+        for day_data in daily.values():
+            for h in day_data.get("hours", []):
+                ever_active.add(h)
+        # Tutte le 24 ore meno quelle in cui Simone ha scritto almeno una volta
+        return sorted(h for h in range(24) if h not in ever_active)
 
     def get_summary(self) -> str:
-        """Ritorna un sommario leggibile dei pattern appresi."""
-        if not self._data:
-            return "Nessun pattern appreso ancora."
+        """Riepilogo leggibile del profilo di attività."""
+        summary = self._data.get("summary", {})
+        if not summary:
+            return ""
+        parts = []
+        if summary.get("most_active_hour") is not None:
+            parts.append(f"ora più attiva: {summary['most_active_hour']}:00")
+        if summary.get("avg_message_length"):
+            parts.append(f"lunghezza media messaggi: {summary['avg_message_length']} char")
+        if summary.get("active_days"):
+            parts.append(f"giorni con dati: {summary['active_days']}")
+        return ", ".join(parts) if parts else ""
 
-        by_day: dict[int, list] = defaultdict(list)
-        for key, data in self._data.items():
-            if data.get("count", 0) < 3:
-                continue
-            parts = key.split("_")
-            if len(parts) != 2:
-                continue
-            try:
-                day, hour = int(parts[0]), int(parts[1])
-            except ValueError:
-                continue
-            topics = data.get("topics", {})
-            top    = max(topics, key=topics.get) if topics else "n/d"
-            by_day[day].append(f"{hour:02d}:00 ({top}, {data['count']}x)")
+    def get_engagement_signal(self) -> str:
+        return ""
 
-        if not by_day:
-            return "Pattern ancora insufficienti (servono ≥ 3 occorrenze per slot)."
+    # ──────────────────────────────────────────────────────────────────────
+    #  Compatibilità con ConsciousnessLoop.notify_interaction()
+    # ──────────────────────────────────────────────────────────────────────
 
-        lines = ["Pattern comportamentali di Simone:"]
-        for day in sorted(by_day.keys()):
-            lines.append(f"  {DAYS_IT[day]}: {', '.join(sorted(by_day[day]))}")
-        return "\n".join(lines)
+    def record_interaction(self, hour: int, weekday: int, topic: str) -> None:
+        """No-op — record_message() è il metodo attivo."""
+        pass
+
+    def analyze_today(self, conversations_text: str) -> None:
+        pass
+
+    def get_predictions(self, lookahead_hours: int = 3) -> list:
+        return []

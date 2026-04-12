@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-04-04T00:28:12.460480",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Dai ok, buonanotte",
+      "timestamp": "2026-04-04T00:28:09.824478"
+    },
+    {
+      "role": "assistant",
+      "content": "Buonanotte Simone. Dormi bene.",
+      "timestamp": "2026-04-04T00:28:12.460464"
+    }
+  ]
+}

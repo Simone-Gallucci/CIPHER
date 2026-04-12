@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-04-03T17:24:52.206191",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ci sei amico?",
+      "timestamp": "2026-04-03T17:24:32.308844"
+    },
+    {
+      "role": "assistant",
+      "content": "Sì, sono qui.",
+      "timestamp": "2026-04-03T17:24:34.724972"
+    },
+    {
+      "role": "user",
+      "content": "Cmq si tutto ok",
+      "timestamp": "2026-04-03T17:24:52.206180"
+    }
+  ]
+}

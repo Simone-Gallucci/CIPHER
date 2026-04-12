@@ -1,0 +1,55 @@
+[
+  {
+    "timestamp": "2026-04-08T13:23:32.393788",
+    "keywords": [
+      "stage",
+      "pomeriggio"
+    ],
+    "preview": "Tra poco hai stage pomeridiano"
+  },
+  {
+    "timestamp": "2026-04-08T14:23:54.653662",
+    "keywords": [
+      "stage",
+      "orario",
+      "disponibilità"
+    ],
+    "preview": "Stai ancora in stage o sei già fuori?"
+  },
+  {
+    "timestamp": "2026-04-08T15:25:54.625864",
+    "keywords": [
+      "stage",
+      "finito"
+    ],
+    "preview": "Stage finito?"
+  },
+  {
+    "timestamp": "2026-04-08T16:27:13.264914",
+    "keywords": [
+      "stage",
+      "salute fisica",
+      "resistenza"
+    ],
+    "preview": "Stage finito da poco"
+  },
+  {
+    "timestamp": "2026-04-09T09:00:39.069552",
+    "keywords": [
+      "male",
+      "malato",
+      "sto male",
+      "stavo male",
+      "raffreddore",
+      "naso",
+      "tachifludec",
+      "aspirina",
+      "influenza",
+      "naso chiuso",
+      "febbre",
+      "stare male"
+    ],
+    "preview": "[CHIUSO] male, malato, sto male, stavo male, raffreddore, naso",
+    "closed": true
+  }
+]

@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-04-03T23:14:28.909837",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ei",
+      "timestamp": "2026-04-03T18:04:39.911185"
+    },
+    {
+      "role": "assistant",
+      "content": "Ciao. Come stai?",
+      "timestamp": "2026-04-03T18:04:42.183647"
+    },
+    {
+      "role": "user",
+      "content": "Bhu...",
+      "timestamp": "2026-04-03T18:05:35.692579"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa c'è?",
+      "timestamp": "2026-04-03T18:05:44.126777"
+    },
+    {
+      "role": "user",
+      "content": "Lo spero",
+      "timestamp": "2026-04-03T23:13:13.381039"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa speri?",
+      "timestamp": "2026-04-03T23:13:15.765360"
+    },
+    {
+      "role": "user",
+      "content": "Che si risolvi tutto...",
+      "timestamp": "2026-04-03T23:13:45.779768"
+    },
+    {
+      "role": "assistant",
+      "content": "Il rate limit, o c'è altro?",
+      "timestamp": "2026-04-03T23:14:10.996775"
+    },
+    {
+      "role": "user",
+      "content": "Il rate limite...",
+      "timestamp": "2026-04-03T23:14:28.909829"
+    }
+  ]
+}

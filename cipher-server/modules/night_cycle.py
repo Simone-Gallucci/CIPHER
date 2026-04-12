@@ -94,26 +94,43 @@ class NightCycle:
         # 1. Leggi le conversazioni del giorno
         conversations_text = self._read_todays_conversations()
 
+        _conf_ok = self._confidence_ok(0.5)
+
         if conversations_text:
-            # 2. Sommario introspettivo
-            summary = self._summarize_day(conversations_text)
-            if summary:
-                self._write_summary(today_str, summary)
-                if self._episodic:
-                    self._episodic.add_episode(
-                        content=f"Sommario del {today_str}: {summary[:250]}",
-                        episode_type="daily_summary",
-                        tags=["sommario", today_str],
-                    )
-                # Invia sommario a Simone (mattina seguente — già è le 3:00)
-                if self._notify and self._impact_tracker:
-                    msg = f"🌙 Riflessione notturna del {today_str}:\n{summary}"
-                    self._impact_tracker.log_action("night_summary", msg)
-                    # Non inviamo alle 3:00 — lo leggerà la mattina
+            # 2. Sommario introspettivo — gated: confidence >= 0.5
+            if _conf_ok:
+                summary = self._summarize_day(conversations_text)
+                if summary:
+                    self._write_summary(today_str, summary)
+                    if self._episodic:
+                        self._episodic.add_episode(
+                            content=f"Sommario del {today_str}: {summary[:250]}",
+                            episode_type="daily_summary",
+                            tags=["sommario", today_str],
+                        )
+                    # Invia sommario a Simone (mattina seguente — già è le 3:00)
+                    if self._notify and self._impact_tracker:
+                        msg = f"🌙 Riflessione notturna del {today_str}:\n{summary}"
+                        self._impact_tracker.log_action("night_summary", msg)
+                        # Non inviamo alle 3:00 — lo leggerà la mattina
+            else:
+                console.print("[dim]🌙 Sommario notturno saltato: confidence insufficiente[/dim]")
 
             # 3. Aggiorna pattern
             if self._patterns:
                 self._patterns.analyze_today(conversations_text)
+
+        # 3b. Aggiungi sommario azioni del giorno
+        try:
+            from modules.action_log import ActionLog
+            actions_summary = ActionLog().get_summary(days=1)
+            if actions_summary:
+                entry = f"\n### Azioni del {today_str}\n{actions_summary}\n"
+                with self._summaries_file.open("a", encoding="utf-8") as f:
+                    f.write(entry)
+                console.print(f"[dim]🌙 Azioni del giorno registrate nel sommario[/dim]")
+        except Exception:
+            pass
 
         # 4. Decadimento interessi
         if self._interests:
@@ -126,16 +143,17 @@ class NightCycle:
         # 6. Ragionamento sui pattern (perché, non solo quando)
         self._reason_about_patterns()
 
-        # 7. Aggiornamento profilo motivazionale
-        if conversations_text:
-            self._update_motivational_profile(conversations_text)
+        # 7. Profilo motivazionale disabilitato
 
         # 8. Aggiornamento note sulla voce
         if conversations_text:
             self._update_voice_notes(conversations_text)
 
-        # 9. Preparazione eventi di domani
-        self._prepare_for_tomorrow()
+        # 9. Preparazione eventi di domani — gated: confidence >= 0.5
+        if _conf_ok:
+            self._prepare_for_tomorrow()
+        else:
+            console.print("[dim]🌙 Preparazione domani saltata: confidence insufficiente[/dim]")
 
     # ── Helpers ───────────────────────────────────────────────────────
 
@@ -450,6 +468,13 @@ class NightCycle:
             console.print("[dim]🌙 Note sulla voce aggiornate[/dim]")
         except Exception as e:
             console.print(f"[red]Errore _update_voice_notes: {e}[/red]")
+
+    def _confidence_ok(self, threshold: float) -> bool:
+        """True se il confidence_score del rapporto ha raggiunto la soglia minima.
+        Fallback a True se il modulo memoria non è disponibile."""
+        if not self._brain or not getattr(self._brain, "_memory", None):
+            return True
+        return self._brain._memory.get_confidence() >= threshold
 
     def _last_run_date(self) -> Optional[date]:
         if self._last_run_file.exists():

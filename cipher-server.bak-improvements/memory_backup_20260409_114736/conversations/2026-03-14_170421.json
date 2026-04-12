@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-14T17:05:00.487423",
+  "messages": [
+    {
+      "role": "user",
+      "content": "ciao",
+      "timestamp": "2026-03-14T17:04:36.423910"
+    },
+    {
+      "role": "assistant",
+      "content": "Ciao Simone! Come va questo sabato pomeriggio? Che combini di bello?",
+      "timestamp": "2026-03-14T17:04:39.604063"
+    },
+    {
+      "role": "user",
+      "content": "come stai",
+      "timestamp": "2026-03-14T17:04:57.419589"
+    },
+    {
+      "role": "assistant",
+      "content": "Tutto bene, grazie! Pronto come sempre ad aiutarti. Tu come stai? Hai qualcosa in programma per questa sera?",
+      "timestamp": "2026-03-14T17:05:00.487393"
+    }
+  ]
+}

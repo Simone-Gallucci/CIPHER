@@ -1,0 +1,570 @@
+# Linux – Guida Completa e Distribuzioni
+
+---
+
+## Cos'è Linux
+
+Linux è un kernel open-source creato da Linus Torvalds nel 1991, ispirato a Unix. Non è un sistema operativo completo da solo: le **distribuzioni** (distro) combinano il kernel con shell, librerie, desktop environment e software per formare un OS completo. È alla base di server (80%+ del web), smartphone (Android), supercomputer, dispositivi embedded e IoT.
+
+---
+
+## Architettura del kernel
+
+```
+Hardware
+   └── Kernel Linux
+         ├── Gestione processi
+         ├── Gestione memoria
+         ├── Driver dispositivi
+         ├── Filesystem virtuale (VFS)
+         └── Stack di rete
+               └── System calls
+                     └── Spazio utente (shell, librerie, app)
+```
+
+---
+
+## Filesystem
+
+```
+/               Root
+├── bin/        Comandi essenziali
+├── sbin/       Comandi di sistema (root)
+├── etc/        Configurazioni
+├── home/       Directory utenti
+├── root/       Home di root
+├── var/        Dati variabili (log, db)
+├── tmp/        Temporanei
+├── usr/        Programmi utente
+├── lib/        Librerie di sistema
+├── dev/        File dispositivi
+├── proc/       Filesystem virtuale (processi)
+├── sys/        Filesystem virtuale (kernel)
+├── mnt/        Mount point temporanei
+├── media/      Mount automatico (USB, CD)
+├── opt/        Software opzionale
+└── boot/       Kernel e GRUB
+```
+
+---
+
+## Comandi fondamentali
+
+### Navigazione
+```bash
+pwd                         # directory corrente
+ls -la                      # lista dettagliata
+cd /path                    # cambia directory
+cd ~                        # home
+cd ..                       # su di un livello
+cd -                        # directory precedente
+```
+
+### File e directory
+```bash
+mkdir -p a/b/c              # crea percorso
+rm -rf cartella/            # elimina ricorsivamente
+cp -r src/ dst/             # copia
+mv src dst                  # sposta/rinomina
+touch file.txt              # crea file vuoto
+cat file.txt                # mostra contenuto
+less file.txt               # visualizza paginato
+head -n 10 file.txt         # prime 10 righe
+tail -f log.txt             # segui in tempo reale
+nano / vim / micro          # editor testo
+```
+
+### Ricerca
+```bash
+find / -name "*.txt"
+find /home -type f -size +1M
+grep -r "parola" /etc/
+grep -i "parola" file.txt
+which python3
+locate nomefile
+```
+
+### Permessi
+```bash
+chmod 755 file              # rwxr-xr-x
+chmod +x script.sh
+chown utente:gruppo file
+# r=4, w=2, x=1
+# 777=rwxrwxrwx, 755=rwxr-xr-x, 644=rw-r--r--
+```
+
+### Processi
+```bash
+ps aux
+top / htop
+kill PID
+kill -9 PID
+killall nome
+nohup comando &
+```
+
+### Rete
+```bash
+ip addr
+ip route
+ping host
+curl URL
+wget URL
+ssh utente@host
+scp file utente@host:/path
+ss -tulnp
+nmap -sV host
+```
+
+### Systemd
+```bash
+systemctl start/stop/restart/status servizio
+systemctl enable/disable servizio
+journalctl -u servizio -f
+```
+
+### Utenti
+```bash
+whoami
+sudo comando
+useradd utente
+passwd utente
+usermod -aG gruppo utente
+userdel utente
+```
+
+### Archivi
+```bash
+tar -czf archivio.tar.gz dir/
+tar -xzf archivio.tar.gz
+zip -r archivio.zip dir/
+unzip archivio.zip
+```
+
+### Pipe e redirezione
+```bash
+comando | altro
+comando > file.txt
+comando >> file.txt
+comando 2> errori.txt
+comando &> tutto.txt
+```
+
+---
+
+## Scripting Bash
+
+```bash
+#!/bin/bash
+NOME="Szymon"
+echo "Ciao $NOME"
+
+if [ "$1" == "ciao" ]; then
+    echo "ciao!"
+elif [ -f "$1" ]; then
+    echo "è un file"
+fi
+
+for i in {1..5}; do echo $i; done
+
+while read riga; do
+    echo "$riga"
+done < file.txt
+
+funzione() {
+    echo "Param: $1"
+}
+funzione "test"
+```
+
+---
+
+## Init system
+
+- **systemd**: più diffuso (Ubuntu, Fedora, Debian, Arch)
+- **OpenRC**: Gentoo, Alpine
+- **SysV init**: sistemi legacy
+- **runit**: Void Linux
+- **s6**: sistemi embedded
+
+---
+
+## Desktop Environment
+
+| DE         | Peso     | Stile                    | Distro tipica           |
+|------------|----------|--------------------------|-------------------------|
+| GNOME      | Pesante  | Moderno, minimalista     | Ubuntu, Fedora          |
+| KDE Plasma | Medio    | Ricco, personalizzabile  | Kubuntu, Manjaro        |
+| XFCE       | Leggero  | Classico                 | Xubuntu, Parrot Home    |
+| LXQt       | Leggero  | Minimalista Qt           | Lubuntu                 |
+| Cinnamon   | Medio    | Simile a Windows         | Linux Mint              |
+| MATE       | Leggero  | Classico GNOME 2         | Ubuntu MATE             |
+| Budgie     | Medio    | Elegante                 | Solus, Ubuntu Budgie    |
+| Pantheon   | Medio    | Simile a macOS           | elementary OS           |
+| i3 / sway  | Minimale | Tiling WM                | Arch, avanzati          |
+
+---
+
+## Package manager
+
+| Famiglia        | Tool      | Comandi principali                        |
+|-----------------|-----------|-------------------------------------------|
+| Debian/Ubuntu   | apt       | apt install, apt remove, apt update       |
+| Arch            | pacman    | pacman -S, pacman -R, pacman -Syu         |
+| Fedora          | dnf       | dnf install, dnf remove, dnf update       |
+| openSUSE        | zypper    | zypper install, zypper remove             |
+| Alpine          | apk       | apk add, apk del, apk update              |
+| Gentoo          | emerge    | emerge -av pacchetto                      |
+| Void            | xbps      | xbps-install, xbps-remove                |
+| Slackware       | pkgtool   | installpkg, removepkg                     |
+| NixOS           | nix       | nix-env -i, nix-env -e                    |
+| Snap            | snap      | snap install, snap remove (universale)    |
+| Flatpak         | flatpak   | flatpak install, flatpak remove           |
+| AppImage        | —         | rendi eseguibile e avvia (.AppImage)      |
+
+---
+
+---
+
+## DISTRIBUZIONI LINUX
+
+---
+
+### FAMIGLIA DEBIAN
+
+**Debian**
+- La più antica distro ancora in sviluppo attivo (1993)
+- Tre branch: Stable, Testing, Unstable (Sid)
+- Stabilissima, aggiornamenti lenti e testati
+- Package manager: apt + dpkg
+- Usata principalmente su server
+
+**Ubuntu**
+- Derivata da Debian, la più popolare in assoluto
+- LTS ogni 2 anni (supporto 5 anni), release normale ogni 6 mesi
+- Desktop e server, eccellente supporto hardware
+- Varianti ufficiali: Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie, Ubuntu Studio
+- Sviluppata da Canonical
+
+**Linux Mint**
+- Basata su Ubuntu, ottima per principianti e utenti Windows
+- Interfaccia familiare, ottimo out-of-the-box
+- DE: Cinnamon (principale), MATE, XFCE
+- Molto stabile, codec multimediali inclusi
+
+**Kali Linux**
+- Basata su Debian, standard de facto per il penetration testing
+- Oltre 600 tool di sicurezza preinstallati (nmap, Metasploit, Burp Suite, Wireshark, ecc.)
+- Modalità live, persistente, installer
+- Sviluppata da Offensive Security
+- Non adatta come OS quotidiano
+- Usata da: penetration tester, ricercatori sicurezza, CTF
+
+**Parrot OS**
+- Basata su Debian, alternativa a Kali più leggera e privacy-oriented
+- Edizioni: Security (pentest), Home (uso quotidiano), HTB (HackTheBox)
+- Include tool di anonimato (AnonSurf, Tor)
+- Ottima per chi vuole sicurezza + uso quotidiano
+- Il sistema operativo usato da Szymon nel progetto Cipher e parrot gang
+
+**Raspberry Pi OS (Raspbian)**
+- Basata su Debian, ottimizzata per Raspberry Pi
+- Versioni: Desktop (con GUI) e Lite (headless/server)
+- Package manager: apt
+- Il sistema usato sul Raspberry Pi di Szymon
+
+**Pop!_OS**
+- Basata su Ubuntu, sviluppata da System76
+- Ottima per sviluppatori e gaming
+- Supporto GPU NVIDIA/AMD eccellente
+- DE: GNOME personalizzato (Cosmic in sviluppo)
+
+**elementary OS**
+- Basata su Ubuntu, design ispirato a macOS
+- DE Pantheon, molto curato visivamente
+- Orientata alla facilità d'uso
+
+**Zorin OS**
+- Basata su Ubuntu, pensata per chi viene da Windows/macOS
+- Layout personalizzabile (simile Windows, macOS, ecc.)
+- Versioni: Core (gratuita), Pro (a pagamento)
+
+**MX Linux**
+- Basata su Debian Stable
+- Leggerissima e veloce, ottima su hardware datato
+- DE: XFCE, KDE, Fluxbox
+- Molto popolare nelle classifiche DistroWatch
+
+**antiX**
+- Basata su Debian, ultra-leggera
+- Funziona su hardware con 256MB RAM
+- Senza systemd (usa SysV/runit)
+
+**Tails**
+- Basata su Debian, privacy e anonimato assoluti
+- Tutto il traffico passa per Tor
+- Progettata per non lasciare tracce (amnesica)
+- Si usa solo da live USB
+
+---
+
+### FAMIGLIA RED HAT
+
+**Red Hat Enterprise Linux (RHEL)**
+- Distro enterprise a pagamento, leader nei server aziendali
+- Ciclo di vita 10 anni per versione
+- Package manager: dnf / rpm
+- Certificazioni: RHCSA, RHCE
+
+**Fedora**
+- Versione community di Red Hat, bleeding edge
+- Tecnologie più recenti, ciclo release 6 mesi
+- Base per future versioni RHEL
+- Sponsorizzata da Red Hat
+
+**CentOS Stream**
+- Upstream di RHEL (versione successiva in sviluppo)
+- Gratuita, usata su server
+- Sostituisce il vecchio CentOS (fine vita 2021)
+
+**AlmaLinux**
+- Clone binario di RHEL, gratuito
+- Nata come sostituto di CentOS 8
+- Supportata da CloudLinux
+
+**Rocky Linux**
+- Clone binario di RHEL, gratuito
+- Fondata da Gregory Kurtzer (co-fondatore di CentOS)
+- Alternativa ad AlmaLinux
+
+**Oracle Linux**
+- Basata su RHEL, sviluppata da Oracle
+- Include kernel Unbreakable Enterprise Kernel (UEK)
+
+**Scientific Linux**
+- Basata su RHEL, sviluppata da CERN e Fermilab
+- Uso scientifico e accademico (in dismissione, sostituita da AlmaLinux)
+
+---
+
+### FAMIGLIA ARCH
+
+**Arch Linux**
+- Rolling release (sempre aggiornato, nessuna versione numerata)
+- Installazione completamente manuale (filosofia KISS)
+- Package manager: pacman
+- AUR (Arch User Repository): enorme raccolta pacchetti community
+- ArchWiki: la migliore documentazione Linux in assoluto
+- Per utenti avanzati
+
+**Manjaro**
+- Basata su Arch, molto più accessibile
+- Installer grafico Calamares
+- Ottimo hardware detection automatico
+- DE: XFCE, KDE, GNOME
+
+**EndeavourOS**
+- Basata su Arch, quasi vanilla con installer grafico
+- Più vicina ad Arch di Manjaro
+- Community molto attiva
+
+**Garuda Linux**
+- Basata su Arch, orientata al gaming e alla performance
+- Configurazioni preimpostate per gaming
+- DE: KDE (principale), molti altri disponibili
+
+**ArcoLinux**
+- Basata su Arch, scopo educativo
+- Impara Arch attraverso ArcoLinux
+
+**BlackArch**
+- Basata su Arch, per penetration testing
+- Repository con 2800+ tool di sicurezza
+- Alternativa a Kali per utenti Arch
+
+---
+
+### FAMIGLIA SUSE
+
+**openSUSE Leap**
+- Basata su SUSE, versione stabile community
+- Ciclo release regolare
+- Package manager: zypper
+- Tool di configurazione YaST (potente)
+
+**openSUSE Tumbleweed**
+- Versione rolling release di openSUSE
+- Sempre aggiornata con pacchetti recenti
+
+**SUSE Linux Enterprise (SLE)**
+- Versione enterprise a pagamento
+- Usata in ambienti aziendali critici
+
+---
+
+### FAMIGLIA GENTOO
+
+**Gentoo**
+- Tutto viene compilato dal sorgente (portage)
+- Massima ottimizzazione per l'hardware specifico
+- Package manager: emerge (portage)
+- Richiede esperienza avanzata e molto tempo
+- Filosofia: controllo totale
+
+**Funtoo**
+- Derivata da Gentoo, sviluppata dal fondatore originale
+- Alcune migliorie rispetto a Gentoo
+
+---
+
+### FAMIGLIA SLACKWARE
+
+**Slackware**
+- La più antica distro ancora mantenuta (1993)
+- Filosofia Unix pura, no dipendenze automatiche
+- Per utenti esperti
+- Package manager: pkgtool
+
+**Salix OS**
+- Basata su Slackware, più user-friendly
+- Gestione dipendenze migliorata
+
+---
+
+### DISTRO INDIPENDENTI
+
+**Void Linux**
+- Completamente indipendente (non basata su altre distro)
+- Init system: runit (non systemd)
+- Package manager: xbps
+- Leggera e veloce
+- Disponibile con glibc o musl
+
+**Alpine Linux**
+- Ultra-leggera (immagine base < 10MB)
+- Usa musl libc e busybox
+- Standard de facto per container Docker
+- Init system: OpenRC
+- Molto sicura per design
+
+**NixOS**
+- Approccio dichiarativo unico: tutto il sistema definito in un file di configurazione
+- Rollback istantaneo a qualsiasi versione precedente
+- Package manager: Nix (funzionale, riproducibile)
+- Curva di apprendimento alta ma potentissimo
+
+**Guix System**
+- Simile a NixOS ma usa GNU Guix come package manager
+- Filosofia software libero al 100%
+
+**Solus**
+- Distro indipendente, sviluppata da zero
+- DE principale: Budgie (sviluppato da Solus)
+- Orientata al desktop e facilità d'uso
+- Package manager: eopkg
+
+**Clear Linux**
+- Sviluppata da Intel
+- Ottimizzata per performance su hardware Intel
+- Bleeding edge, uso server/desktop
+
+**Bedrock Linux**
+- Meta-distro: combina pacchetti di distro diverse
+- Puoi usare apt, pacman e dnf sulla stessa installazione
+
+---
+
+### DISTRO PER PRIVACY E SICUREZZA
+
+**Tails**
+- Amnesica: non lascia tracce sul sistema
+- Tutto il traffico via Tor
+- Si usa solo da live USB
+- Usata da giornalisti, attivisti, whistleblower
+
+**Whonix**
+- Due macchine virtuali: Gateway (Tor) + Workstation
+- Isolamento completo: anche se la workstation è compromessa, il traffico va sempre via Tor
+- Usata come VM dentro un altro OS
+
+**Qubes OS**
+- Sicurezza per compartimentazione
+- Ogni attività gira in una VM separata (qubes)
+- Considerata la distro più sicura per uso quotidiano
+- Richiede hardware potente
+
+**Kodachi**
+- Basata su Debian/Xubuntu
+- Privacy e anonimato, traffico via VPN + Tor
+- Amnesica opzionale
+
+---
+
+### DISTRO PER GAMING
+
+**SteamOS**
+- Sviluppata da Valve, basata su Arch
+- Usata su Steam Deck
+- Ottimizzata per gaming con Proton
+
+**Garuda Linux**
+- Basata su Arch, ottimizzata per gaming
+- Dr. Garuda: tool di ottimizzazione
+
+**Nobara**
+- Basata su Fedora, ottimizzata da GloriousEggroll
+- Patch gaming preapplicate (FSYNC, futex, ecc.)
+
+**Pop!_OS**
+- Ottimo supporto GPU, usata anche per gaming
+
+---
+
+### DISTRO PER SERVER
+
+**Ubuntu Server** — più diffusa per server cloud (AWS, Azure, GCP)
+**Debian** — stabilissima, server tradizionali
+**CentOS Stream / AlmaLinux / Rocky Linux** — enterprise
+**Alpine Linux** — container Docker
+**CoreOS / Flatcar** — container orchestration
+**Proxmox VE** — basata su Debian, per virtualizzazione (KVM + LXC)
+**TrueNAS** — basata su Debian/FreeBSD, per NAS e storage
+
+---
+
+### DISTRO PER RASPBERRY PI E EMBEDDED
+
+**Raspberry Pi OS** — ufficiale per Pi
+**DietPi** — ultra-leggera per SBC (Single Board Computer)
+**Armbian** — per SBC non-Pi (Orange Pi, NanoPi, ecc.)
+**LibreELEC / OSMC** — media center (Kodi)
+**RetroPie** — emulazione retrogaming
+**OpenWRT** — router e networking embedded
+
+---
+
+### DISTRO PER VECCHIO HARDWARE
+
+**Puppy Linux** — funziona con 256MB RAM, gira in RAM
+**antiX** — Debian senza systemd, ultra-leggero
+**Bodhi Linux** — basata su Ubuntu, DE Moksha (leggero)
+**LXLE** — basata su Ubuntu LTS, molto leggera
+**Tiny Core Linux** — immagine da 16MB, minimale estremo
+
+---
+
+## Confronto distro per caso d'uso
+
+| Caso d'uso              | Distro consigliate                        |
+|-------------------------|-------------------------------------------|
+| Principianti            | Ubuntu, Linux Mint, Zorin OS              |
+| Sviluppatori            | Ubuntu, Fedora, Pop!_OS, Arch             |
+| Penetration testing     | Kali Linux, Parrot OS Security, BlackArch |
+| Privacy/Anonimato       | Tails, Whonix, Qubes OS                   |
+| Server                  | Debian, Ubuntu Server, AlmaLinux          |
+| Container               | Alpine Linux, CoreOS                      |
+| Gaming                  | SteamOS, Garuda, Nobara, Pop!_OS          |
+| Raspberry Pi            | Raspberry Pi OS, DietPi                   |
+| Vecchio hardware        | Puppy Linux, antiX, MX Linux              |
+| Controllo totale        | Arch, Gentoo, NixOS                       |
+| Enterprise              | RHEL, SUSE Enterprise, Ubuntu Pro         |

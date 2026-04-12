@@ -50,7 +50,7 @@ class RealtimeContext:
             json.dumps(snapshot, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-        console.print(f"[dim]🌐 Contesto real-time aggiornato ({Config.WEATHER_CITY})[/dim]")
+        console.print("[dim]🌐 Contesto real-time aggiornato[/dim]")
 
     def build_context(self) -> str:
         """Restituisce un blocco testo da includere nel system prompt."""
@@ -74,7 +74,7 @@ class RealtimeContext:
 
         weather = data.get("weather", "")
         if weather:
-            lines.append(f"- Meteo ({Config.WEATHER_CITY}): {weather}")
+            lines.append(f"- Meteo: {weather}")
 
         news = data.get("news", [])
         if news:
@@ -91,7 +91,7 @@ class RealtimeContext:
         Usa wttr.in con format=3 → risposta tipo "Rome: ⛅️ +18°C"
         Nessuna API key richiesta.
         """
-        city = Config.WEATHER_CITY.replace(" ", "+")
+        city = "Ancona"
         try:
             r = requests.get(
                 f"https://wttr.in/{city}?format=3&lang=it",
@@ -99,6 +99,7 @@ class RealtimeContext:
                 headers={"User-Agent": "Cipher-AI/1.0"},
             )
             if r.status_code == 200:
+                r.encoding = "utf-8"
                 return r.text.strip()
         except Exception as e:
             console.print(f"[dim]⚠️  Meteo non disponibile: {e}[/dim]")
@@ -131,7 +132,13 @@ class RealtimeContext:
                 results = list(self._ddgs.news(query, max_results=2))
                 for r in results:
                     title = r.get("title", "").strip()
-                    if title and title not in seen:
+                    _skip = (
+                        not title
+                        or title in seen
+                        or title.startswith("BUG:")
+                        or any(c in title for c in ("â", "Â", "Ã", "\x00"))
+                    )
+                    if not _skip:
                         seen.add(title)
                         headlines.append(title)
             except Exception:

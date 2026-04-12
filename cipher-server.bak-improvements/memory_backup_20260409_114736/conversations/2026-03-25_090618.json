@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-25T23:44:00.921270",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Buonanotte",
+      "timestamp": "2026-03-25T23:43:42.219901"
+    },
+    {
+      "role": "assistant",
+      "content": "Buonanotte Simone, riposa bene! 🌙",
+      "timestamp": "2026-03-25T23:44:00.901398"
+    }
+  ]
+}

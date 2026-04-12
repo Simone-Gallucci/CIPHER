@@ -1,0 +1,145 @@
+{
+  "timestamp": "2026-04-04T15:26:03.194128",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Giuro",
+      "timestamp": "2026-04-04T15:14:45.374379"
+    },
+    {
+      "role": "assistant",
+      "content": "Quindi sì, finalmente. Come stai adesso che si è liberato l'aria?",
+      "timestamp": "2026-04-04T15:14:48.523426"
+    },
+    {
+      "role": "user",
+      "content": "?",
+      "timestamp": "2026-04-04T15:15:06.668729"
+    },
+    {
+      "role": "assistant",
+      "content": "Intendevo — sono andati via i parenti?",
+      "timestamp": "2026-04-04T15:15:09.164758"
+    },
+    {
+      "role": "user",
+      "content": "Ancora no",
+      "timestamp": "2026-04-04T15:15:28.045292"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah, ancora lì. Reggi.",
+      "timestamp": "2026-04-04T15:15:29.684999"
+    },
+    {
+      "role": "user",
+      "content": "Non ho capito pk pensavi fossero andati vai 🤔",
+      "timestamp": "2026-04-04T15:15:58.568513"
+    },
+    {
+      "role": "assistant",
+      "content": "Avevi detto \"giuro\" — l'ho interpretato come conferma che erano andati. Ma evidentemente stavi confermando qualcos'altro.",
+      "timestamp": "2026-04-04T15:16:02.358229"
+    },
+    {
+      "role": "user",
+      "content": "Si hahha",
+      "timestamp": "2026-04-04T15:16:38.991458"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa stavi confermando allora?",
+      "timestamp": "2026-04-04T15:16:40.371125"
+    },
+    {
+      "role": "user",
+      "content": "Che stasera finisco la giornata bene che esco",
+      "timestamp": "2026-04-04T15:17:02.909987"
+    },
+    {
+      "role": "assistant",
+      "content": "Ha senso. Qualcosa di buono a cui aggrapparsi mentre aspetti che se ne vadano.",
+      "timestamp": "2026-04-04T15:17:06.062694"
+    },
+    {
+      "role": "user",
+      "content": "Gia",
+      "timestamp": "2026-04-04T15:17:29.699754"
+    },
+    {
+      "role": "assistant",
+      "content": "Con chi esci stasera?",
+      "timestamp": "2026-04-04T15:17:31.136698"
+    },
+    {
+      "role": "user",
+      "content": "Un mio amico te lo avevo detto",
+      "timestamp": "2026-04-04T15:17:48.648562"
+    },
+    {
+      "role": "assistant",
+      "content": "Sì, ma non mi hai detto chi è.",
+      "timestamp": "2026-04-04T15:17:49.715691"
+    },
+    {
+      "role": "user",
+      "content": "Ah vero, si chiama Rudy",
+      "timestamp": "2026-04-04T15:18:05.908967"
+    },
+    {
+      "role": "assistant",
+      "content": "Rudy. Amico stretto o uno di quelli con cui esci ogni tanto?",
+      "timestamp": "2026-04-04T15:18:08.996056"
+    },
+    {
+      "role": "user",
+      "content": "Uno di quelli con cui esco ogni tanto per non stare dentro casa",
+      "timestamp": "2026-04-04T15:18:51.269450"
+    },
+    {
+      "role": "assistant",
+      "content": "Capito. Non il tipo di uscita intensa, più una boccata d'aria.",
+      "timestamp": "2026-04-04T15:18:53.356442"
+    },
+    {
+      "role": "user",
+      "content": "Gia... Però almeno esco",
+      "timestamp": "2026-04-04T15:23:35.552035"
+    },
+    {
+      "role": "assistant",
+      "content": "Meglio di stare dentro con i parenti comunque.",
+      "timestamp": "2026-04-04T15:23:39.361813"
+    },
+    {
+      "role": "user",
+      "content": "Si",
+      "timestamp": "2026-04-04T15:23:56.694991"
+    },
+    {
+      "role": "assistant",
+      "content": "Sono andati via nel frattempo?",
+      "timestamp": "2026-04-04T15:23:57.808139"
+    },
+    {
+      "role": "user",
+      "content": "No. Appena se ne vanno te lo dico",
+      "timestamp": "2026-04-04T15:24:20.242742"
+    },
+    {
+      "role": "assistant",
+      "content": "Ok, aspetto.",
+      "timestamp": "2026-04-04T15:24:21.406601"
+    },
+    {
+      "role": "user",
+      "content": "[Simone ha inviato una foto con didascalia: Lui é il mio migliore amico. Descrizione: ⚠️ Errore Claude Vision: 404 Client Error: Not Found for url: https://api.anthropic.com/v1/chat/completions] Rispondi in modo naturale.",
+      "timestamp": "2026-04-04T15:26:00.197647"
+    },
+    {
+      "role": "assistant",
+      "content": "Errore nel caricamento della foto, non riesco a vederla. Chi è?",
+      "timestamp": "2026-04-04T15:26:03.194107"
+    }
+  ]
+}

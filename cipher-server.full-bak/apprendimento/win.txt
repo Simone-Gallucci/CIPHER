@@ -1,0 +1,658 @@
+# Windows – Guida Completa
+
+---
+
+## Introduzione
+
+Windows è il sistema operativo desktop più diffuso al mondo, sviluppato da Microsoft. Usa il kernel Windows NT (ibrido: microkernel + monolitico). Domina il mercato desktop con circa il 70-75% di quota, ed è ampiamente usato in ambienti aziendali, gaming e sviluppo.
+
+---
+
+## Storia delle versioni Windows
+
+| Versione              | Anno | Note principali                                          |
+|-----------------------|------|----------------------------------------------------------|
+| Windows 1.0           | 1985 | Prima interfaccia grafica Microsoft                      |
+| Windows 3.1           | 1992 | Prima versione largamente adottata                       |
+| Windows 95            | 1995 | Rivoluzionario: Start menu, barra delle applicazioni     |
+| Windows 98            | 1998 | Miglioramento del 95, USB support                        |
+| Windows ME            | 2000 | Millennium Edition, problematica                         |
+| Windows 2000          | 2000 | NT per business, molto stabile                           |
+| Windows XP            | 2001 | Iconica, supporto ufficiale terminato 2014               |
+| Windows Vista         | 2007 | UAC introdotto, lenta e problematica                     |
+| Windows 7             | 2009 | Molto amata, supporto terminato gennaio 2020             |
+| Windows 8             | 2012 | Interfaccia Metro, rimosso Start menu, impopolare        |
+| Windows 8.1           | 2013 | Fix di Windows 8, parziale reintroduzione Start          |
+| Windows 10            | 2015 | Ritorno al Start menu, aggiornamenti continuativi        |
+| Windows 11            | 2021 | UI rinnovata, requisiti elevati (TPM 2.0, Secure Boot)   |
+
+### Windows Server
+| Versione               | Anno | Note                                      |
+|------------------------|------|-------------------------------------------|
+| Windows Server 2008 R2 | 2009 | End of Life 2020                          |
+| Windows Server 2012 R2 | 2013 | End of Life 2023                          |
+| Windows Server 2016    | 2016 | Containers, Nano Server                   |
+| Windows Server 2019    | 2018 | Ampiamente usato in aziende               |
+| Windows Server 2022    | 2021 | Attuale, sicurezza migliorata             |
+
+---
+
+## Edizioni Windows 10/11
+
+| Edizione          | Target               | Note                                          |
+|-------------------|----------------------|-----------------------------------------------|
+| Home              | Utenti consumer      | Base, senza GPO, Hyper-V limitato             |
+| Pro               | Professionisti       | BitLocker, GPO, RDP, Hyper-V                  |
+| Pro Workstation   | Workstation avanzate | ReFS, più RAM/CPU supportata                  |
+| Enterprise        | Grandi aziende       | Branch deployment, LTSC, AppLocker            |
+| Education         | Scuole               | Come Enterprise, licenze educative            |
+| LTSC              | Sistemi critici      | Long Term Servicing Channel, no Store         |
+| S Mode            | Sicurezza            | Solo app da Store, browser solo Edge          |
+
+---
+
+## Architettura Windows
+
+```
+Hardware
+   └── HAL (Hardware Abstraction Layer)
+         └── NT Kernel
+               ├── Executive (I/O, memoria, processi, sicurezza)
+               ├── Kernel mode drivers
+               └── Win32k.sys (GDI, USER)
+                     └── User mode
+                           ├── Win32 subsystem (CSRSS)
+                           ├── Applicazioni Win32
+                           ├── .NET Runtime (CLR)
+                           └── WSL (Linux subsystem)
+```
+
+---
+
+## Filesystem Windows
+
+```
+C:\
+├── Windows\
+│   ├── System32\           DLL e eseguibili di sistema (64-bit)
+│   ├── SysWOW64\           Compatibilità 32-bit su sistemi 64-bit
+│   ├── WinSxS\             Component store (side-by-side assembly)
+│   └── Temp\               Temporanei di sistema
+├── Program Files\          Applicazioni 64-bit
+├── Program Files (x86)\    Applicazioni 32-bit
+├── ProgramData\            Dati condivisi tra utenti (nascosta)
+├── Users\
+│   ├── Public\             Condivisa tra tutti gli utenti
+│   └── NomeUtente\
+│       ├── Desktop\
+│       ├── Documents\
+│       ├── Downloads\
+│       ├── Pictures\
+│       ├── Music\
+│       ├── Videos\
+│       └── AppData\        Nascosta, dati applicazioni
+│           ├── Local\      Dati locali (non roaming)
+│           ├── LocalLow\   Dati con bassa integrità
+│           └── Roaming\    Dati sincronizzati con dominio
+└── pagefile.sys            File di paging (swap)
+```
+
+---
+
+## Filesystem supportati
+
+| Filesystem | Uso                          | Note                              |
+|------------|------------------------------|-----------------------------------|
+| NTFS       | Principale per Windows       | ACL, journaling, compressione     |
+| FAT32      | Compatibilità universale     | Max file 4GB, max partizione 32GB |
+| exFAT      | Schede SD, USB               | No journaling, file grandi OK     |
+| ReFS       | Server, workstation          | Resiliente, no compressione       |
+| CDFS/UDF   | CD/DVD                       | Sola lettura                      |
+
+---
+
+## CMD – Prompt dei comandi
+
+```cmd
+:: Navigazione
+dir                         :: lista file (ls)
+dir /a                      :: include file nascosti
+cd percorso                 :: cambia directory
+cd ..                       :: su di un livello
+cd /d D:\percorso           :: cambia anche il drive
+
+:: File e directory
+mkdir cartella
+rmdir /s /q cartella        :: elimina ricorsivamente
+del file.txt
+del /f /q file.txt          :: forza eliminazione
+copy src dst
+xcopy src\ dst\ /s /e       :: copia ricorsiva
+move src dst
+ren vecchio nuovo
+type file.txt               :: cat
+more file.txt               :: paginato
+echo testo > file.txt       :: scrivi in file
+echo testo >> file.txt      :: append
+
+:: Sistema
+cls                         :: pulisce schermo
+echo %variabile%            :: stampa variabile
+set VAR=valore              :: imposta variabile
+set                         :: tutte le variabili
+systeminfo                  :: info sistema
+winver                      :: versione Windows
+hostname                    :: nome computer
+whoami                      :: utente corrente
+whoami /priv                :: privilegi
+date                        :: data corrente
+time                        :: ora corrente
+
+:: Processi
+tasklist                    :: lista processi
+tasklist /fi "imagename eq chrome.exe"
+taskkill /pid 1234 /f       :: termina per PID
+taskkill /im notepad.exe /f :: termina per nome
+
+:: Rete
+ipconfig                    :: configurazione rete
+ipconfig /all               :: dettagliata
+ipconfig /flushdns          :: svuota cache DNS
+ping host
+tracert host                :: traceroute
+nslookup dominio            :: risoluzione DNS
+netstat -ano                :: connessioni attive
+arp -a                      :: tabella ARP
+route print                 :: tabella routing
+
+:: Utenti
+net user                    :: lista utenti
+net user nome password /add :: crea utente
+net user nome /delete       :: elimina utente
+net localgroup Administrators nome /add
+
+:: Servizi
+sc query                    :: lista servizi
+sc start NomeServizio
+sc stop NomeServizio
+net start NomeServizio
+net stop NomeServizio
+
+:: Disco
+chkdsk C: /f                :: controlla disco
+sfc /scannow                :: verifica file di sistema
+defrag C: /u /v             :: deframmenta
+diskpart                    :: gestione dischi avanzata
+format D: /fs:NTFS          :: formatta
+```
+
+---
+
+## PowerShell
+
+PowerShell è la shell moderna di Windows basata su .NET.
+
+```powershell
+# Alias comuni (uguali a Linux)
+ls / dir / Get-ChildItem
+cd / Set-Location
+cat / Get-Content
+cp / Copy-Item
+mv / Move-Item
+rm / Remove-Item
+echo / Write-Host
+
+# File e directory
+Get-ChildItem -Recurse -Filter "*.txt"
+New-Item -ItemType Directory -Name "cartella"
+New-Item -ItemType File -Name "file.txt"
+Remove-Item -Recurse -Force "cartella\"
+Get-Content file.txt
+Set-Content file.txt "contenuto"
+Add-Content file.txt "aggiunto"
+Select-String "parola" file.txt     # grep
+
+# Processi
+Get-Process
+Get-Process | Where-Object {$_.CPU -gt 100}
+Stop-Process -Id 1234
+Stop-Process -Name "notepad"
+Start-Process notepad
+
+# Servizi
+Get-Service
+Get-Service | Where-Object {$_.Status -eq "Running"}
+Start-Service "NomeServizio"
+Stop-Service "NomeServizio"
+Restart-Service "NomeServizio"
+Set-Service "NomeServizio" -StartupType Automatic
+
+# Rete
+Get-NetIPAddress
+Get-NetAdapter
+Get-NetRoute
+Test-Connection google.com          # ping
+Test-NetConnection google.com -Port 443
+Resolve-DnsName google.com
+Get-NetTCPConnection                # netstat
+
+# Variabili
+$variabile = "valore"
+$numero = 42
+$lista = @(1, 2, 3)
+$hash = @{chiave = "valore"}
+$env:PATH                           # variabile ambiente
+[System.Environment]::GetEnvironmentVariable("PATH", "User")
+
+# Funzioni
+function Saluta {
+    param([string]$Nome = "Utente")
+    Write-Host "Ciao $Nome!"
+}
+Saluta -Nome "Szymon"
+
+# Controllo flusso
+if ($x -gt 0) { ... } else { ... }
+foreach ($item in $lista) { ... }
+for ($i = 0; $i -lt 10; $i++) { ... }
+while ($condizione) { ... }
+
+# Confronto
+-eq, -ne, -gt, -lt, -ge, -le
+-like, -notlike (wildcard)
+-match, -notmatch (regex)
+-and, -or, -not
+
+# Pipeline
+Get-Process | Sort-Object CPU -Descending | Select-Object -First 10
+Get-ChildItem | Where-Object {$_.Extension -eq ".txt"} | Remove-Item
+
+# Errori
+try {
+    # codice
+} catch {
+    Write-Error $_.Exception.Message
+} finally {
+    # sempre eseguito
+}
+
+# Remoting
+Enter-PSSession -ComputerName SERVER01
+Invoke-Command -ComputerName SERVER01 -ScriptBlock { Get-Service }
+
+# Moduli
+Get-Module -ListAvailable
+Import-Module ActiveDirectory
+Install-Module -Name Az -Scope CurrentUser
+
+# Esecuzione script
+Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\script.ps1
+```
+
+---
+
+## Registro di sistema (Registry)
+
+Database gerarchico delle configurazioni di Windows e applicazioni.
+
+```
+HKEY_LOCAL_MACHINE (HKLM)
+├── SOFTWARE\            Software installato
+├── SYSTEM\              Configurazione di sistema
+├── HARDWARE\            Hardware (volatile)
+└── SECURITY\            Politiche di sicurezza
+
+HKEY_CURRENT_USER (HKCU)
+├── SOFTWARE\            Software per utente corrente
+└── Control Panel\       Impostazioni pannello di controllo
+
+HKEY_CLASSES_ROOT (HKCR)    Associazioni file e COM
+HKEY_USERS (HKU)             Tutti i profili utente
+HKEY_CURRENT_CONFIG (HKCC)  Configurazione hardware corrente
+```
+
+```cmd
+regedit                                         :: editor grafico
+
+:: Da CMD/PowerShell
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+reg add "HKCU\Software\MiaApp" /v Setting /t REG_SZ /d "valore"
+reg delete "HKCU\Software\MiaApp" /v Setting /f
+reg export "HKCU\Software\MiaApp" backup.reg
+reg import backup.reg
+```
+
+---
+
+## Gestione utenti e gruppi
+
+```powershell
+# Utenti locali
+Get-LocalUser
+New-LocalUser "nome" -Password (ConvertTo-SecureString "pass" -AsPlainText -Force)
+Set-LocalUser "nome" -PasswordNeverExpires $true
+Enable-LocalUser "nome"
+Disable-LocalUser "nome"
+Remove-LocalUser "nome"
+
+# Gruppi locali
+Get-LocalGroup
+Get-LocalGroupMember "Administrators"
+Add-LocalGroupMember -Group "Administrators" -Member "nome"
+Remove-LocalGroupMember -Group "Administrators" -Member "nome"
+
+# Gruppi built-in importanti
+Administrators      # accesso completo
+Users               # utenti standard
+Power Users         # privilegi intermedi
+Remote Desktop Users # accesso RDP
+```
+
+---
+
+## UAC (User Account Control)
+
+Meccanismo di sicurezza che richiede conferma per azioni privilegiate.
+Livelli:
+1. Notifica sempre (massima sicurezza)
+2. Notifica quando app tenta modifiche (default)
+3. Notifica senza oscurare desktop
+4. Non notificare mai (pericoloso)
+
+---
+
+## Sicurezza Windows
+
+### Windows Defender
+```powershell
+Get-MpComputerStatus
+Start-MpScan -ScanType QuickScan
+Start-MpScan -ScanType FullScan
+Add-MpPreference -ExclusionPath "C:\cartella"
+```
+
+### Firewall
+```powershell
+Get-NetFirewallRule | Where-Object {$_.Enabled -eq "True"}
+New-NetFirewallRule -DisplayName "HTTP" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow
+Remove-NetFirewallRule -DisplayName "HTTP"
+Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled True
+```
+
+### BitLocker
+```powershell
+Get-BitLockerVolume
+Enable-BitLocker -MountPoint "C:" -EncryptionMethod Aes256
+Disable-BitLocker -MountPoint "C:"
+```
+
+### AppLocker (Enterprise/Pro)
+Controlla quali applicazioni possono essere eseguite dagli utenti.
+
+---
+
+## Strumenti di sistema (mmc snap-in e tool)
+
+```
+msconfig            :: configurazione avvio e servizi
+services.msc        :: gestione servizi
+eventvwr.msc        :: visualizzatore eventi
+compmgmt.msc        :: gestione computer
+devmgmt.msc         :: gestione dispositivi
+diskmgmt.msc        :: gestione disco
+gpedit.msc          :: criteri di gruppo (Pro/Enterprise)
+secpol.msc          :: criteri di sicurezza locali
+lusrmgr.msc         :: utenti e gruppi locali
+taskschd.msc        :: utilità di pianificazione
+perfmon.msc         :: performance monitor
+resmon              :: monitor risorse
+regedit             :: registro di sistema
+regedt32            :: alias di regedit
+mmc                 :: Microsoft Management Console
+certmgr.msc         :: gestione certificati
+credwiz             :: gestione credenziali
+netplwiz            :: account utente avanzato
+sysdm.cpl           :: proprietà sistema
+ncpa.cpl            :: connessioni di rete
+appwiz.cpl          :: programmi e funzionalità
+firewall.cpl        :: firewall Windows
+inetcpl.cpl         :: opzioni Internet
+winver              :: versione Windows
+dxdiag              :: DirectX e info hardware
+msinfo32            :: informazioni di sistema
+```
+
+---
+
+## Task Scheduler
+
+```powershell
+# Crea task pianificato
+$action = New-ScheduledTaskAction -Execute "python.exe" -Argument "C:\script.py"
+$trigger = New-ScheduledTaskTrigger -Daily -At "08:00"
+Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "MioScript" -Description "Script giornaliero"
+
+# Gestione
+Get-ScheduledTask
+Start-ScheduledTask -TaskName "MioScript"
+Unregister-ScheduledTask -TaskName "MioScript" -Confirm:$false
+```
+
+---
+
+## Gestione processi e performance
+
+```
+Task Manager (Ctrl+Shift+Esc)
+├── Processi        :: tutti i processi con CPU/RAM
+├── Performance     :: CPU, RAM, disco, rete in tempo reale
+├── Storico app     :: consumo risorse nel tempo
+├── Avvio           :: programmi all'avvio
+├── Utenti          :: processi per utente
+├── Dettagli        :: PID, priorità, affinità
+└── Servizi         :: stato servizi Windows
+```
+
+---
+
+## Rete Windows
+
+```powershell
+# Configurazione IP statico
+New-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress "192.168.1.100" -PrefixLength 24 -DefaultGateway "192.168.1.1"
+Set-DnsClientServerAddress -InterfaceAlias "Ethernet" -ServerAddresses "8.8.8.8","8.8.4.4"
+
+# DHCP
+Set-NetIPInterface -InterfaceAlias "Ethernet" -Dhcp Enabled
+
+# Condivisione file (SMB)
+New-SmbShare -Name "Condivisa" -Path "C:\Cartella" -FullAccess "Administrators"
+Get-SmbShare
+Remove-SmbShare -Name "Condivisa"
+
+# RDP
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+```
+
+---
+
+## WSL (Windows Subsystem for Linux)
+
+Esegui Linux nativamente su Windows senza VM.
+
+```powershell
+wsl --install                           :: installa WSL2 con Ubuntu
+wsl --install -d Debian                 :: installa distro specifica
+wsl --list --verbose                    :: distro installate e versione
+wsl --set-default Ubuntu                :: imposta distro default
+wsl --set-version Ubuntu 2             :: converte a WSL2
+wsl --set-default-version 2            :: WSL2 per le nuove
+wsl --shutdown                          :: spegni tutte le distro
+wsl --export Ubuntu backup.tar          :: backup
+wsl --import Ubuntu C:\WSL backup.tar  :: ripristino
+wsl -d Ubuntu                           :: avvia distro specifica
+wsl ~                                   :: avvia nella home Linux
+```
+
+Accesso filesystem:
+- Da WSL a Windows: `/mnt/c/`, `/mnt/d/`
+- Da Windows a WSL: `\\wsl$\Ubuntu\home\utente\`
+
+---
+
+## Virtualizzazione
+
+### Hyper-V (Pro/Enterprise/Server)
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All
+New-VM -Name "MiaVM" -MemoryStartupBytes 2GB -Generation 2
+Start-VM "MiaVM"
+Stop-VM "MiaVM"
+Get-VM
+```
+
+### Windows Sandbox
+- Ambiente Windows isolato e temporaneo
+- Si resetta ad ogni chiusura
+- Richiede Windows 10/11 Pro
+```powershell
+Enable-WindowsOptionalFeature -Online -FeatureName "Containers-DisposableClientVM"
+```
+
+---
+
+## Package management
+
+### winget (built-in, Windows 10/11)
+```cmd
+winget search nome
+winget install Publisher.App
+winget uninstall Publisher.App
+winget upgrade --all
+winget list
+```
+
+### Chocolatey (terze parti)
+```powershell
+# Installazione
+Set-ExecutionPolicy Bypass -Scope Process -Force
+iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+# Uso
+choco install git
+choco install vscode
+choco uninstall git
+choco upgrade all
+choco list --local-only
+```
+
+### Scoop (terze parti)
+```powershell
+irm get.scoop.sh | iex
+scoop install git
+scoop install python
+```
+
+---
+
+## Event Log
+
+```powershell
+# Visualizzatore eventi
+Get-EventLog -LogName System -Newest 50
+Get-EventLog -LogName Application -EntryType Error -Newest 20
+Get-WinEvent -LogName "Microsoft-Windows-PowerShell/Operational" -MaxEvents 10
+
+# Log principali
+# System       :: eventi kernel e driver
+# Application  :: eventi applicazioni
+# Security     :: login, accessi, audit
+# Setup        :: installazioni Windows
+```
+
+---
+
+## Group Policy (GPO) – Pro/Enterprise
+
+Gestisce impostazioni di sistema e sicurezza per utenti/computer.
+
+```
+gpedit.msc → Criteri Computer Locale
+├── Configurazione computer
+│   ├── Impostazioni Windows (sicurezza, script)
+│   └── Modelli amministrativi (registry-based)
+└── Configurazione utente
+    ├── Impostazioni Windows
+    └── Modelli amministrativi
+```
+
+```cmd
+gpupdate /force         :: applica GPO immediatamente
+gpresult /r             :: mostra GPO applicate
+```
+
+---
+
+## Active Directory (Server)
+
+Servizio directory Microsoft per gestire utenti, computer e risorse in un dominio.
+
+```powershell
+# Richiede modulo RSAT: ActiveDirectory
+Import-Module ActiveDirectory
+
+Get-ADUser -Filter *
+Get-ADUser -Identity "szymon"
+New-ADUser -Name "Mario Rossi" -SamAccountName "mrossi" -Enabled $true
+Set-ADAccountPassword -Identity "mrossi" -NewPassword (ConvertTo-SecureString "Pass123!" -AsPlainText -Force)
+Remove-ADUser -Identity "mrossi"
+
+Get-ADGroup -Filter *
+Add-ADGroupMember -Identity "IT" -Members "mrossi"
+
+Get-ADComputer -Filter *
+```
+
+---
+
+## Shortcuts utili Windows
+
+```
+Win + R             :: finestra Esegui
+Win + X             :: menu contestuale amministrazione
+Win + I             :: Impostazioni
+Win + E             :: Esplora file
+Win + L             :: blocca schermo
+Win + D             :: mostra desktop
+Win + Tab           :: Task View
+Win + V             :: clipboard history
+Win + Shift + S     :: screenshot area
+Ctrl + Shift + Esc  :: Task Manager
+Alt + F4            :: chiudi applicazione
+Win + Pause         :: proprietà sistema
+```
+
+---
+
+## Risoluzione problemi comuni
+
+```cmd
+:: File di sistema corrotti
+sfc /scannow
+DISM /Online /Cleanup-Image /RestoreHealth
+
+:: Problemi rete
+netsh winsock reset
+netsh int ip reset
+ipconfig /flushdns
+ipconfig /release
+ipconfig /renew
+
+:: Problemi disco
+chkdsk C: /f /r    :: richiede riavvio
+
+:: Reset password amministratore (da recovery)
+net user Administrator nuovapassword
+```

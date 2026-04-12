@@ -1,0 +1,54 @@
+# ── Variabili d'ambiente e secrets ───────────────────
+.env
+*.key
+*.pem
+secrets.txt
+credentials.json
+token.json
+secrets/
+
+# ── Modelli Vosk (pesanti, si riscaricano) ────────────
+models/
+
+# ── Ambiente virtuale Python ──────────────────────────
+venv/
+.venv/
+env/
+
+# ── Cache Python ──────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ── Memoria e dati utente ─────────────────────────────
+memory/
+home/
+
+# ── Upload utente ─────────────────────────────────────
+uploads/
+
+# ── Audio TTS generati ────────────────────────────────
+voices/
+*.mp3
+*.wav
+*.ogg
+
+# ── File runtime ──────────────────────────────────────
+comando.txt
+
+# ── Cache mypy ────────────────────────────────────────
+.mypy_cache/
+
+# ── Log ───────────────────────────────────────────────
+*.log
+logs/
+
+# ── Editor e OS ───────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

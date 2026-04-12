@@ -1,0 +1,480 @@
+# AL Language – Microsoft Dynamics 365 Business Central
+
+## Introduzione
+AL (Application Language) è il linguaggio di programmazione usato per sviluppare estensioni per Microsoft Dynamics 365 Business Central (ex NAV/Navision). È un linguaggio fortemente tipizzato, orientato agli oggetti, sviluppato da Microsoft. Le estensioni vengono create in Visual Studio Code con l'estensione AL Language.
+
+---
+
+## Setup ambiente
+
+1. Installare **Visual Studio Code**
+2. Installare l'estensione **AL Language** (Microsoft)
+3. Installare **Docker** (per container Business Central) o avere accesso a un ambiente BC
+4. Comando per creare un nuovo progetto: `AL: Go!` (da VS Code Command Palette)
+
+File generati:
+- `app.json` — metadati dell'estensione
+- `launch.json` — configurazione debug/deploy
+- `.alpackages/` — dipendenze (simboli BC)
+
+---
+
+## app.json
+
+```json
+{
+    "id": "12345678-1234-1234-1234-123456789012",
+    "name": "MyExtension",
+    "publisher": "MyCompany",
+    "version": "1.0.0.0",
+    "brief": "Descrizione breve",
+    "description": "Descrizione estesa",
+    "privacyStatement": "",
+    "EULA": "",
+    "help": "",
+    "url": "",
+    "logo": "",
+    "dependencies": [
+        {
+            "id": "63ca2fa4-4f03-4f2b-a480-172fef340d3f",
+            "publisher": "Microsoft",
+            "name": "System Application",
+            "version": "1.0.0.0"
+        }
+    ],
+    "application": "23.0.0.0",
+    "platform": "23.0.0.0",
+    "target": "Cloud"
+}
+```
+
+---
+
+## Tipi di oggetti AL
+
+| Oggetto       | Descrizione                                      |
+|---------------|--------------------------------------------------|
+| Table         | Definisce una tabella nel database               |
+| TableExtension| Estende una tabella esistente                    |
+| Page          | Interfaccia utente                               |
+| PageExtension | Estende una pagina esistente                     |
+| Codeunit      | Contiene logica di business (funzioni/procedure) |
+| Report        | Report stampabili/esportabili                    |
+| Query         | Query strutturate sul database                   |
+| Enum          | Enumerazione di valori                           |
+| EnumExtension | Estende un enum esistente                        |
+| Interface     | Interfaccia (contratto)                          |
+| PermissionSet | Gestione permessi                                |
+
+---
+
+## Table
+
+```al
+table 50100 "My Customer"
+{
+    Caption = 'My Customer';
+    DataClassification = CustomerContent;
+
+    fields
+    {
+        field(1; "No."; Code[20])
+        {
+            Caption = 'No.';
+        }
+        field(2; Name; Text[100])
+        {
+            Caption = 'Name';
+        }
+        field(3; "Balance (LCY)"; Decimal)
+        {
+            Caption = 'Balance';
+            Editable = false;
+        }
+        field(4; Status; Enum "My Status")
+        {
+            Caption = 'Status';
+        }
+    }
+
+    keys
+    {
+        key(PK; "No.") { Clustered = true; }
+        key(Name; Name) { }
+    }
+
+    trigger OnInsert()
+    begin
+        // codice eseguito all'inserimento
+    end;
+
+    trigger OnModify()
+    begin
+    end;
+
+    trigger OnDelete()
+    begin
+    end;
+}
+```
+
+---
+
+## TableExtension
+
+```al
+tableextension 50101 "Customer Ext" extends Customer
+{
+    fields
+    {
+        field(50100; "Custom Field"; Text[50])
+        {
+            Caption = 'Custom Field';
+            DataClassification = CustomerContent;
+        }
+    }
+}
+```
+
+---
+
+## Page
+
+```al
+page 50100 "My Customer Card"
+{
+    PageType = Card;
+    SourceTable = "My Customer";
+    Caption = 'My Customer Card';
+
+    layout
+    {
+        area(Content)
+        {
+            group(General)
+            {
+                Caption = 'General';
+                field("No."; Rec."No.")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Numero cliente';
+                }
+                field(Name; Rec.Name)
+                {
+                    ApplicationArea = All;
+                }
+                field(Status; Rec.Status)
+                {
+                    ApplicationArea = All;
+                }
+            }
+        }
+    }
+
+    actions
+    {
+        area(Processing)
+        {
+            action(MyAction)
+            {
+                Caption = 'Esegui';
+                ApplicationArea = All;
+                Image = Post;
+
+                trigger OnAction()
+                var
+                    MyCodeunit: Codeunit "My Codeunit";
+                begin
+                    MyCodeunit.DoSomething(Rec);
+                end;
+            }
+        }
+    }
+}
+```
+
+---
+
+## PageExtension
+
+```al
+pageextension 50101 "Customer Card Ext" extends "Customer Card"
+{
+    layout
+    {
+        addafter(Name)
+        {
+            field("Custom Field"; Rec."Custom Field")
+            {
+                ApplicationArea = All;
+            }
+        }
+    }
+
+    actions
+    {
+        addafter("&Customer")
+        {
+            action(MyNewAction)
+            {
+                Caption = 'Nuova Azione';
+                ApplicationArea = All;
+                trigger OnAction()
+                begin
+                    Message('Ciao da estensione!');
+                end;
+            }
+        }
+    }
+}
+```
+
+---
+
+## Codeunit
+
+```al
+codeunit 50100 "My Codeunit"
+{
+    procedure DoSomething(var Rec: Record "My Customer")
+    begin
+        if Rec.Name = '' then
+            Error('Il nome non può essere vuoto.');
+
+        Rec.Name := UpperCase(Rec.Name);
+        Rec.Modify(true);
+        Message('Operazione completata per %1', Rec."No.");
+    end;
+
+    local procedure Helper(): Boolean
+    var
+        i: Integer;
+    begin
+        for i := 1 to 10 do
+            if i = 5 then
+                exit(true);
+        exit(false);
+    end;
+}
+```
+
+---
+
+## Variabili e tipi di dati
+
+```al
+var
+    // Tipi base
+    MyInt: Integer;
+    MyDecimal: Decimal;
+    MyText: Text[100];
+    MyCode: Code[20];
+    MyBool: Boolean;
+    MyDate: Date;
+    MyTime: Time;
+    MyDateTime: DateTime;
+    MyGuid: Guid;
+
+    // Record
+    CustomerRec: Record Customer;
+    ItemRec: Record Item;
+
+    // Codeunit
+    MyCodeunit: Codeunit "My Codeunit";
+
+    // Temporanei
+    TempRec: Record "My Table" temporary;
+```
+
+---
+
+## Controllo del flusso
+
+```al
+// if-then-else
+if x > 0 then
+    Message('positivo')
+else
+    Message('negativo');
+
+// if con begin-end
+if Condition then begin
+    // blocco
+end else begin
+    // blocco
+end;
+
+// case
+case Status of
+    Status::Active:
+        Message('Attivo');
+    Status::Blocked:
+        Error('Cliente bloccato');
+    else
+        Message('Sconosciuto');
+end;
+
+// for
+for i := 1 to 10 do begin
+    // ...
+end;
+
+// while
+while Condition do begin
+    // ...
+end;
+
+// repeat-until
+repeat
+    // ...
+until Condition;
+```
+
+---
+
+## Record – operazioni CRUD
+
+```al
+var
+    Customer: Record Customer;
+begin
+    // Lettura singola
+    if Customer.Get('C001') then
+        Message(Customer.Name);
+
+    // FindFirst, FindLast, FindSet
+    Customer.SetRange("Country/Region Code", 'IT');
+    Customer.SetFilter(Balance, '>%1', 0);
+    if Customer.FindSet() then
+        repeat
+            // elabora ogni record
+        until Customer.Next() = 0;
+
+    // Inserimento
+    Customer.Init();
+    Customer."No." := 'C999';
+    Customer.Name := 'Test';
+    Customer.Insert(true);
+
+    // Modifica
+    Customer.Get('C001');
+    Customer.Name := 'Nuovo Nome';
+    Customer.Modify(true);
+
+    // Eliminazione
+    Customer.Get('C001');
+    Customer.Delete(true);
+
+    // Calcolo somma campo
+    Customer.CalcSums("Balance (LCY)");
+end;
+```
+
+---
+
+## Enum
+
+```al
+enum 50100 "My Status"
+{
+    Extensible = true;
+
+    value(0; " ") { Caption = ' '; }
+    value(1; Active) { Caption = 'Attivo'; }
+    value(2; Blocked) { Caption = 'Bloccato'; }
+    value(3; Pending) { Caption = 'In attesa'; }
+}
+```
+
+---
+
+## Funzioni di sistema comuni
+
+```al
+Message('Testo %1', variabile);        // messaggio informativo
+Error('Errore: %1', msg);             // errore bloccante
+Confirm('Sei sicuro?')                // dialog sì/no -> Boolean
+StrSubstNo('Ciao %1', nome)           // formattazione stringa
+Format(data, 0, '<Day>/<Month>/<Year>') // formattazione data
+Today()                               // data odierna
+CurrentDateTime()                     // data e ora correnti
+UpperCase(testo)
+LowerCase(testo)
+StrLen(testo)
+CopyStr(testo, 1, 5)
+DelChr(testo, '=', ' ')               // rimuove caratteri
+Evaluate(variabile, testo)            // converti stringa a tipo
+```
+
+---
+
+## Report
+
+```al
+report 50100 "My Report"
+{
+    UsageCategory = ReportsAndAnalysis;
+    ApplicationArea = All;
+    Caption = 'My Report';
+
+    dataset
+    {
+        dataitem(Customer; Customer)
+        {
+            column(No; "No.") { }
+            column(Name; Name) { }
+            column(Balance; "Balance (LCY)") { }
+
+            trigger OnPreDataItem()
+            begin
+                SetRange("Country/Region Code", 'IT');
+            end;
+        }
+    }
+
+    requestpage
+    {
+        layout
+        {
+            area(Content)
+            {
+                group(Options)
+                {
+                    field(MyFilter; MyFilterVar)
+                    {
+                        ApplicationArea = All;
+                    }
+                }
+            }
+        }
+    }
+
+    var
+        MyFilterVar: Text[50];
+}
+```
+
+---
+
+## Best practices
+
+- Usare sempre `ApplicationArea = All` nei campi delle pagine
+- Aggiungere `DataClassification` su ogni campo delle tabelle
+- Evitare oggetti con ID < 50000 (riservati a Microsoft)
+- Usare `ToolTip` su tutti i campi delle pagine
+- Preferire procedure in Codeunit rispetto a trigger diretti
+- Usare `Error()` per errori bloccanti, `Message()` per info
+- Testare con `OnRun` trigger nella codeunit principale
+
+---
+
+## Comandi VS Code
+
+```
+AL: Go!                    → crea nuovo progetto
+AL: Download Symbols       → scarica simboli BC
+AL: Publish                → pubblica estensione
+AL: Publish Without Debugging
+F5                         → pubblica e avvia debug
+Ctrl+Shift+P               → Command Palette
+```

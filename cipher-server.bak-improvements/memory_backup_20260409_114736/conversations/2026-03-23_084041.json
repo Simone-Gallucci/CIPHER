@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-03-23T09:19:08.852728",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Riprova la lettura di scheduler.py",
+      "timestamp": "2026-03-23T09:10:42.533290"
+    },
+    {
+      "role": "assistant",
+      "content": "Ecco il contenuto di `scheduler.py`. Tutto a posto, il modulo gestisce:\n\n- **Briefing mattutino** alle 7:30 con eventi del calendario\n- **Task personalizzati** (daily, weekly, once) salvati in `scheduling/tasks.json`\n- **Azioni supportate**: messaggio Telegram, WhatsApp, lista calendario, lista Gmail\n- Loop con check ogni 60 secondi\n\nVolevi verificare qualcosa di specifico o stai pensando a modifiche?",
+      "timestamp": "2026-03-23T09:10:52.421997"
+    },
+    {
+      "role": "user",
+      "content": "Non aveva visto il reminder di oggi delle 8:10, ricordi?",
+      "timestamp": "2026-03-23T09:13:03.382213"
+    },
+    {
+      "role": "assistant",
+      "content": "La cartella `scheduling` è vuota — non c'è nessun file `tasks.json` né file per i reminder. Questo spiega perché non ha scattato: il reminder probabilmente non è stato salvato su disco, oppure è stato salvato altrove.\n\nFammi controllare se c'è un modulo dedicato ai reminder nel progetto.\n\n{\"action\": \"project_list\", \"params\": {\"path\": \"modules\"}}",
+      "timestamp": "2026-03-23T09:13:14.337093"
+    },
+    {
+      "role": "user",
+      "content": "Ok",
+      "timestamp": "2026-03-23T09:14:50.193712"
+    },
+    {
+      "role": "assistant",
+      "content": "Hmm, il file non esiste nonostante compaia nella lista dei moduli. Strano. Fammi ricontrollare cosa c'è effettivamente nella cartella modules.\n\n{\"action\": \"project_list\", \"params\": {\"path\": \"modules\"}}",
+      "timestamp": "2026-03-23T09:14:58.723007"
+    },
+    {
+      "role": "user",
+      "content": "Ok controlla",
+      "timestamp": "2026-03-23T09:15:50.352978"
+    },
+    {
+      "role": "assistant",
+      "content": "{\"action\": \"project_list\", \"params\": {\"path\": \"modules\"}}",
+      "timestamp": "2026-03-23T09:15:58.632367"
+    },
+    {
+      "role": "user",
+      "content": "Poi dimmi",
+      "timestamp": "2026-03-23T09:17:00.936366"
+    },
+    {
+      "role": "assistant",
+      "content": "Il file `reminders.py` non esiste nel progetto. Questo è il problema: non c'è un modulo dedicato ai reminder.\n\nQuando ti ho impostato il reminder stamattina, probabilmente l'azione è stata accettata a livello di risposta ma non c'è codice che effettivamente lo salvi e lo esegua alla scadenza.\n\nIn pratica servirebbero due cose:\n1. Un file `modules/reminders.py` che salvi i reminder su disco (tipo `scheduling/reminders.json`) e li controlli periodicamente\n2. Integrarlo nello `scheduler.py` per il check nel loop\n\nVuoi che ti preparo il codice per il modulo reminders? Così lo rivedi e, se va bene, lo mettiamo nel progetto.",
+      "timestamp": "2026-03-23T09:17:12.350587"
+    },
+    {
+      "role": "user",
+      "content": "Si vai poi prima di inserirlo lo voglio controllare",
+      "timestamp": "2026-03-23T09:18:50.789496"
+    },
+    {
+      "role": "assistant",
+      "content": "Ecco la mia proposta per `modules/reminders.py`:\n\n```python\n\"\"\"\nModulo Reminders per Cipher\nSalva, controlla e notifica promemoria programmati.\n\"\"\"\n\nimport json\nimport os\nfrom datetime import datetime\n\nREMINDERS_FILE = os.path.join(os.path.dirname(__file__), \"..\", \"scheduling\", \"reminders.json\")\n\n\ndef _load_reminders():\n    \"\"\"Carica i reminder dal file JSON.\"\"\"\n    if not os.path.exists(REMINDERS_FILE):\n        return []\n    with open(REMINDERS_FILE, \"r\") as f:\n        try:\n            return json.load(f)\n        except json.JSONDecodeError:\n            return []\n\n\ndef _save_reminders(reminders):\n    \"\"\"Salva i reminder su file JSON.\"\"\"\n    os.makedirs(os.path.dirname(REMINDERS_FILE), exist_ok=True)\n    with open(REMINDERS_FILE, \"w\") as f:\n        json.dump(reminders, f, indent=2, ensure_ascii=False)\n\n\ndef add_reminder(remind_at: str, label: str, calendar: bool = True):\n    \"\"\"\n    Aggiunge un nuovo reminder.\n    remind_at: formato \"YYYY-MM-DD HH:MM\"\n    label: descrizione del promemoria\n    calendar: se True, crea anche evento Google Calendar\n    \"\"\"\n    reminders = _load_reminders()\n\n    # Genera ID incrementale\n    next_id = max((r[\"id\"] for r in reminders), default=0) + 1\n\n    reminder = {\n        \"id\": next_id,\n        \"remind_at\": remind_at,\n        \"label\": label,\n        \"calendar\": calendar,\n        \"notified\": False,\n        \"created_at\": datetime.now().strftime(\"%Y-%m-%d %H:%M\")\n    }\n\n    reminders.append(reminder)\n    _save_reminders(reminders)\n    return reminder\n\n\ndef check_due_reminders():\n    \"\"\"\n    Controlla se ci sono reminder scaduti e non ancora notificati.\n    Restituisce la lista dei reminder da notificare e li segna come notificati.\n    \"\"\"\n    reminders = _load_reminders()\n    now = datetime.now()\n    due = []\n\n    for r in reminders:\n        if r[\"notified\"]:\n            continue\n        try:\n            remind_time = datetime.strptime(r[\"remind_at\"], \"%Y-%m-%d %H:%M\")\n        except ValueError:\n            continue\n\n        if now >= remind_time:\n            r[\"notified\"] = True\n            due.append(r)\n\n    if due:\n        _save_reminders(reminders)\n\n    return due\n\n\ndef list_reminders(include_notified=False):\n    \"\"\"Restituisce i reminder attivi (o tutti se include_notified=True).\"\"\"\n    reminders = _load_reminders()\n    if include_notified:\n        return reminders\n    return [r for r in reminders if not r[\"notified\"]]\n\n\ndef cancel_reminder(reminder_id: int):\n    \"\"\"Cancella un reminder per ID. Restituisce True se trovato e rimosso.\"\"\"\n    reminders = _load_reminders()\n    filtered = [r for r in reminders if r[\"id\"] != reminder_id]\n    if len(filtered) < len(reminders):\n        _save_reminders(filtered)\n        return True\n    return False\n\n\ndef cleanup_old_reminders(days=7):\n    \"\"\"Rimuove i reminder notificati più vecchi di N giorni.\"\"\"\n    reminders = _load_reminders()\n    now = datetime.now()\n    cleaned = []\n\n    for r in reminders:\n        if r[\"notified\"]:\n            try:\n                remind_time = datetime.strptime(r[\"remind_at\"], \"%Y-%m-%d %H:%M\")\n                if (now - remind_time).days > days:\n                    continue\n            except ValueError:\n                continue\n        cleaned.append(r)\n\n    _save_reminders(cleaned)\n```\n\nE poi nello `scheduler.py` andrebbe aggiunto nel loop principale qual",
+      "timestamp": "2026-03-23T09:19:08.852691"
+    }
+  ]
+}

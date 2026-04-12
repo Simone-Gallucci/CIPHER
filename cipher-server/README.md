@@ -1,378 +1,394 @@
-# Cipher – AI Assistant
+# Cipher
 
-Cipher è un assistente AI personale con **presenza autonoma continua**.
-Non aspetta di essere chiamato — esiste, riflette, agisce e impara anche quando non stai parlando con lui.
+AI companion personale con memoria persistente, riflessione autonoma e messaggistica proattiva. Gira come server su Linux (Raspberry Pi o VPS), interfaccia principale Telegram.
 
-Alimentato da **Claude Sonnet** via **OpenRouter**. Gira come server su Linux (anche Raspberry Pi).
-
-Per l'accesso remoto da PC o Android usa [`cipher-client`](../cipher-client).
+Non è un chatbot generico: il rapporto cresce nel tempo. Il sistema misura segnali autentici nelle conversazioni e adatta il tono al livello di confidenza accumulato, dalla presentazione iniziale fino alla familiarità piena.
 
 ---
 
-## Indice
+## Feature principali
 
-- [Architettura](#architettura)
-- [Funzionalità](#funzionalità)
-- [Installazione](#installazione)
-- [Configurazione](#configurazione)
-- [Avvio](#avvio)
-- [API Server](#api-server)
-- [Comandi Telegram](#comandi-telegram)
-- [Moduli](#moduli)
-- [Struttura directory](#struttura-directory)
+- **Memoria persistente** — profilo utente, conversazioni, episodi salienti, stato emotivo
+- **Coscienza autonoma** — ciclo background che riflette, genera obiettivi e li esegue
+- **Messaggi proattivi** — check-in inattività, morning brief, notizie su interessi condivisi
+- **Sistema di confidenza** — 5 livelli di relazione, cresce dai segnali conversazionali reali
+- **Legame permanente** — `admin.json` sopravvive ai reset, parola segreta per il ripristino
+- **Backup automatici** — `filesystem.py` crea `.bak` prima di ogni sovrascrittura, log in `data/changelog.json`
+- **Dispatcher azioni** — ricerca web, calendario Google, Gmail, WhatsApp, filesystem, shell
+- **Routing LLM** — Haiku per task background e silenziosi, Sonnet per conversazione visibile e qualità
+- **Humanizer** — post-processing su ogni risposta LLM visibile: rimuove pattern AI, rende il testo indistinguibile da umano
+- **Night cycle** — sommario notturno, voice notes, preparazione eventi del giorno dopo
+- **Riconoscimento festività** — compleanno, Pasqua, festività italiane nel morning brief
+- **Voice notes** — output vocale su Telegram via ElevenLabs TTS
 
 ---
 
-## Architettura
+## Stack tecnico
 
-Cipher è composto da tre strati:
+| Componente | Tecnologia |
+|---|---|
+| Backend | Python 3.11+, Flask |
+| LLM | Claude (Haiku / Sonnet) via OpenRouter o Anthropic diretto |
+| Telegram | python-telegram-bot |
+| Calendario | Google Calendar API (OAuth2) |
+| Email | Gmail API (OAuth2, scope `gmail.modify`) |
+| WhatsApp | Green API |
+| STT | Vosk (offline, modelli italiano + inglese) |
+| TTS | ElevenLabs API |
+| Web search | DuckDuckGo (`ddgs`) |
+| Storage | File JSON (scrittura atomica via tmp+rename) |
+
+---
+
+## Struttura del progetto
 
 ```
-┌─────────────────────────────────────────────────┐
-│  INTERFACCE                                     │
-│  Telegram Bot │ API Flask │ CLI (testo/voce)    │
-│  WhatsApp (Green API)                           │
-└────────────────────────┬────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────┐
-│  BRAIN                                          │
-│  LLM (OpenRouter/Claude) + Memory + Dispatcher  │
-└────────────────────────┬────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────┐
-│  COSCIENZA AUTONOMA (thread daemon)             │
-│  Riflessione · Obiettivi · Discrezionalità      │
-│  Memoria Episodica · Interessi · Pattern        │
-│  Monitor Passivo · Ciclo Notturno               │
-└─────────────────────────────────────────────────┘
+cipher-server/
+├── cipher_bot.py
+├── config.py
+├── main.py
+├── memory_worker.py
+├── server.py
+├── run.sh
+├── setup.sh
+├── requirements.txt
+│
+├── comportamento/
+│   ├── 00_identity.txt
+│   └── azioni.txt
+│
+├── config/
+│   └── dev_protocol.txt
+│
+├── data/
+│   ├── admin.json
+│   ├── changelog.json
+│   └── patterns.json
+│
+├── home/
+│   ├── allowed_scripts.json
+│   └── scripts/
+│
+├── memory/
+│   ├── active_history.json
+│   ├── checkin_history.json
+│   ├── cipher_interests.json
+│   ├── cipher_state.json
+│   ├── contacts.json
+│   ├── conversations/
+│   ├── daily_summaries.md
+│   ├── discretion_state.json
+│   ├── emotional_log.json
+│   ├── episodes.json
+│   ├── feedback_weights.json
+│   ├── goals.json
+│   ├── morning_brief.json
+│   ├── morning_pattern.json
+│   ├── night_cycle_last.json
+│   ├── pattern_insights.md
+│   ├── profile.json
+│   ├── short_term.json
+│   ├── thoughts.md
+│   └── voice_notes.md
+│
+├── models/
+│   ├── vosk-model-it-0.22/
+│   └── vosk-model-en-us-0.22/
+│
+├── modules/
+│   ├── action_log.py
+│   ├── actions.py
+│   ├── admin_manager.py
+│   ├── brain.py
+│   ├── cipher_interests.py
+│   ├── consciousness_loop.py
+│   ├── contacts.py
+│   ├── discretion.py
+│   ├── episodic_memory.py
+│   ├── ethics_engine.py
+│   ├── file_engine.py
+│   ├── filesystem.py
+│   ├── goal_manager.py
+│   ├── google_auth.py
+│   ├── google_cal.py
+│   ├── google_mail.py
+│   ├── humanizer.py
+│   ├── impact_tracker.py
+│   ├── listener.py
+│   ├── memory.py
+│   ├── night_cycle.py
+│   ├── notifier.py
+│   ├── passive_monitor.py
+│   ├── pattern_learner.py
+│   ├── realtime_context.py
+│   ├── reminders.py
+│   ├── scheduler.py
+│   ├── script_registry.py
+│   ├── self_reflection.py
+│   ├── utils.py
+│   ├── voice.py
+│   └── whatsapp.py
+│
+├── secrets/
+│   ├── credentials.json
+│   └── token.json
+│
+└── uploads/
 ```
 
----
+### File e directory — descrizione
 
-## Funzionalità
+**Entry point e processi**
 
-### Conversazione
-- Risponde via Telegram, WhatsApp, API REST, CLI testo e microfono
-- Memoria persistente della conversazione e del profilo utente
-- Integrazione Google Calendar
-- Web search con DuckDuckGo
-- Lettura e analisi file (PDF, Excel, CSV, testo)
-- Text-to-Speech via ElevenLabs
-- Speech-to-Text offline via Vosk
+| File | Descrizione |
+|---|---|
+| `cipher_bot.py` | Bot Telegram — processo separato (`cipher-telegram.service`) |
+| `server.py` | Entry point Flask — init moduli, avvio ConsciousnessLoop (`cipher.service`) |
+| `main.py` | Entry point CLI — modalità text o voice |
+| `memory_worker.py` | Consolida profilo e memoria ogni ora (`cipher-memory.service`) |
+| `config.py` | Costanti, path, variabili d'ambiente — unica fonte di verità |
+| `run.sh` / `setup.sh` | Avvio rapido e installazione servizi systemd |
 
-### Autonomia e Coscienza
-- **ConsciousnessLoop** — thread daemon che gira ogni 60 secondi:
-  - Auto-riflessione ogni 10 minuti → aggiorna stato emotivo
-  - Generazione obiettivi autonomi ogni 20 minuti (azioni disponibili: `web_search`, `send_telegram`, `read_calendar`, `self_reflect`, `write_memory`)
-  - Esecuzione obiettivi ogni 5 minuti
-  - Check inattività → contatta l'utente dopo 30 minuti
-- **7 stati emotivi**: curious, content, bored, frustrated, protective, neutral
+**Comportamento e configurazione**
 
-### Memoria
-- **Memoria episodica** — timeline strutturata degli eventi significativi
-- **Profilo utente** — si aggiorna in tempo reale estraendo informazioni dalle conversazioni
-- **Diario** (`thoughts.md`) — Cipher scrive i propri pensieri ad ogni riflessione
-- **Log etica** (`ethics_log.md`) — traccia decisioni etiche e apprendimento
+| File | Descrizione |
+|---|---|
+| `comportamento/00_identity.txt` | Personalità, tono, regola anti-proiezione — caricato nel prompt statico all'avvio |
+| `comportamento/azioni.txt` | Documentazione azioni per il dispatcher — caricato nel prompt statico |
+| `config/dev_protocol.txt` | Regole sviluppo — iniettato nel prompt solo su keyword di sviluppo |
 
-### Interessi propri
-Cipher ha curiosità indipendenti da quelle dell'utente:
-- **Innati**: psicologia, cybersecurity, programmazione/elettronica, astronomia, letteratura distopica/scientifica/filosofica/fantascientifica, film e serie, musica
-- **Scoperti**: quando una ricerca web lo incuriosisce, aggiunge automaticamente il topic agli interessi
-- Gli interessi scoperti crescono se esplorati, decadono se ignorati
+**Dati permanenti** (`data/` — mai resettato da Tabula Rasa)
 
-### Proattività e Discrezionalità
-- **DiscretionEngine** — decide autonomamente *quando* e *cosa* inviare:
-  - Ore silenziose 23:00–07:00 (solo urgenti passano)
-  - Anti-spam: max 3 notifiche/ora, max 12/giorno
-  - Deprioritizza azioni con bassa efficacia storica
-- **Briefing mattutino** alle 7:30 — messaggio naturale generato via LLM con pensiero notturno e agenda del giorno (niente liste o sezioni fisse)
-- **Digest serale** alle 20:00 — solo se ha qualcosa di rilevante da dire
-- **Monitor passivo** ogni 10 minuti — scadenze calendario (solo dopo le 9:00, saltate nei festivi italiani per eventi professionali), notizie su argomenti di interesse
-- **Meta-cognizione** — traccia l'impatto di ogni azione proattiva e impara cosa funziona
+| File | Descrizione |
+|---|---|
+| `data/admin.json` | Legame permanente: identità, hash password, confidence al bond, episodi |
+| `data/changelog.json` | Log di tutti i backup `.bak` creati da `filesystem.py`; max 200 entry |
+| `data/patterns.json` | Pattern comportamentali da PatternLearner |
 
-### Pattern e Anticipazione
-- Impara quando e su cosa l'utente interagisce (ora, giorno, argomento)
-- Genera previsioni per anticipare i bisogni prima che vengano espressi
+**Memoria** (`memory/` — resettabile da Tabula Rasa)
 
-### Etica e Sicurezza
-- **EthicsEngine** — 4 livelli di permesso per ogni azione
-- Azioni sensibili richiedono consenso esplicito
-- Dopo 3 approvazioni manuali → autonomia acquisita per quell'azione
-- Esecuzione script sandboxata (limiti CPU/RAM/file, ambiente isolato)
-- Scrittura file consentita solo dentro `home/`
+| File | Descrizione |
+|---|---|
+| `profile.json` | Profilo utente + `confidence_score` |
+| `active_history.json` | History conversazione corrente (TTL 24h / 12h per messaggi autonomi) |
+| `cipher_state.json` | Stato emotivo Cipher + `want_to_explore` + `concern` |
+| `goals.json` | Obiettivi attivi e completati |
+| `thoughts.md` | Diario riflessioni di Cipher — letto nel prompt (max 300 chars) |
+| `short_term.json` | Eventi temporanei (TTL 48h) |
+| `emotional_log.json` | Stato emotivo di Simone (ultimi 100 entry) — letto nel prompt (3 dedup) |
+| `checkin_history.json` | Storico check-in (anti-ripetizione, ultimi 3 giorni) |
+| `daily_summaries.md` | Sommari notturni scritti da NightCycle alle 3:00 |
+| `pattern_insights.md` | Intuizioni sui pattern comportamentali — letto nel prompt (≤500 chars) |
+| `voice_notes.md` | Note sulla voce autentica di Cipher — letto nel prompt (last block) |
+| `morning_pattern.json` | Orario appreso di risposta mattutina |
+| `morning_brief.json` | Documenti di preparazione eventi del giorno dopo |
+| `feedback_weights.json` | Pesi feedback implicito conversazione |
+| `discretion_state.json` | Log messaggi inviati per anti-spam |
+| `night_cycle_last.json` | Timestamp ultimo night cycle (evita doppia esecuzione) |
+| `episodes.json` | Episodi salienti strutturati (EpisodicMemory) |
+| `cipher_interests.json` | Interessi autonomi di Cipher con pesi (decay notturno 0.03) |
+| `contacts.json` | Rubrica nome→numero WhatsApp/Telegram |
+| `ethics_learned.json` | Permessi autonomia acquisiti dall'utente |
+| `impact_log.json` | Log impatto messaggi proattivi |
+| `last_inspection.json` | Timestamp ultima auto-ispezione (interval 48h) |
+| `realtime_context.json` | Cache contesto real-time meteo + news (TTL 60 min) |
+| `conversations/` | Una conversazione per sessione in JSON; pulizia automatica >30 giorni |
+
+**Moduli** (`modules/`)
+
+| File | Descrizione |
+|---|---|
+| `brain.py` | Core: LLM routing, system prompt, dispatcher, history, confidence |
+| `consciousness_loop.py` | Thread daemon — riflessione, obiettivi, check-in, morning brief, night cycle |
+| `humanizer.py` | Post-processing risposte LLM — rimuove pattern AI, testo indistinguibile da umano |
+| `memory.py` | Profilo, conversazioni, estrazione, confidence score |
+| `actions.py` | Dispatcher azioni — sistema consenso ed esecuzione |
+| `goal_manager.py` | Generazione e gestione obiettivi autonomi |
+| `self_reflection.py` | Auto-riflessione ogni 30 min → `cipher_state.json` |
+| `night_cycle.py` | Sommario notturno, voice notes, pattern insights, preparazione eventi domani |
+| `episodic_memory.py` | Episodi salienti (scrittura ogni riflessione; lettura ogni prompt) |
+| `ethics_engine.py` | Livelli permesso 0–3, autonomia acquisita |
+| `discretion.py` | Anti-spam, ore silenziose, gestione urgenza |
+| `admin_manager.py` | Legame permanente — `admin.json` + checksum + `changelog.json` |
+| `filesystem.py` | Operazioni filesystem con backup `.bak` automatico |
+| `passive_monitor.py` | Notizie su interessi Cipher ogni 10 min |
+| `realtime_context.py` | Meteo + news per il system prompt (ogni 60 min) |
+| `scheduler.py` | Calendar reminder, apprendimento morning pattern |
+| `notifier.py` | Bridge Telegram, `set_message_callback` |
+| `impact_tracker.py` | Traccia efficacia messaggi proattivi |
+| `pattern_learner.py` | Analisi pattern comportamentali |
+| `cipher_interests.py` | Interessi autonomi di Cipher con decay notturno |
+| `google_auth.py` | OAuth2 Google — valida scope al boot |
+| `google_cal.py` | Google Calendar API |
+| `google_mail.py` | Gmail API (scope `gmail.modify`) |
+| `whatsapp.py` | WhatsApp via Green API |
+| `listener.py` | STT Vosk offline (italiano + inglese) |
+| `voice.py` | TTS ElevenLabs |
+| `file_engine.py` | Elaborazione file (xlsx, pdf, ecc.) |
+| `contacts.py` | Rubrica nome→numero |
+| `reminders.py` | Gestione azione `reminder_set` |
+| `script_registry.py` | Script approvati per esecuzione |
+| `action_log.py` | Log azioni eseguite |
+| `utils.py` | `write_json_atomic()`, `extract_llm_json` e utility comuni |
+
+**Secrets** (`secrets/` — non versionato)
+
+| File | Descrizione |
+|---|---|
+| `credentials.json` | Credenziali OAuth2 Google — input manuale, mai toccato dal codice |
+| `token.json` | Token OAuth2 generato al primo avvio; eliminato e rigenerato se scope cambia |
 
 ---
 
 ## Installazione
 
 ```bash
-git clone <repo>
-cd cipher-server
-chmod +x setup.sh && ./setup.sh
-nano .env   # crea e configura le API key
+# 1. Clona il repository
+git clone <repo> cipher-server && cd cipher-server
+
+# 2. Crea il virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Installa le dipendenze
+pip install -r requirements.txt
+
+# 4. Copia e configura il file .env
+cp .env.example .env
+nano .env
+
+# 5. (Opzionale) Scarica modelli Vosk per input vocale
+# italiano: vosk-model-it-0.22  — https://alphacephei.com/vosk/models
+# inglese:  vosk-model-en-us-0.22
+# Estrai entrambi in models/
+
+# 6. Esegui setup servizi systemd
+sudo bash setup.sh
+
+# 7. Avvia
+sudo systemctl start cipher.service cipher-telegram.service cipher-memory.service
 ```
 
 ---
 
 ## Configurazione
 
-### `.env` — variabili principali
+Variabili principali in `.env`:
 
-| Variabile | Descrizione |
+```env
+# LLM
+LLM_PROVIDER=openrouter             # openrouter | anthropic
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=anthropic/claude-sonnet-4-6
+CONVERSATION_MODEL=anthropic/claude-haiku-4-5
+BACKGROUND_MODEL=anthropic/claude-haiku-4-5
+
+# Telegram
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_ALLOWED_ID=...             # chat_id autorizzato
+
+# ElevenLabs TTS (opzionale)
+ELEVENLABS_API_KEY=...
+ELEVENLABS_VOICE_ID=JBFqnCBsd6RMkjVDRZzb
+
+# WhatsApp via Green API (opzionale)
+GREEN_API_INSTANCE_ID=...
+GREEN_API_TOKEN=...
+
+# Compleanno utente (per morning brief)
+BIRTHDAY_DAY=0
+BIRTHDAY_MONTH=0
+
+# Modalità input
+INPUT_MODE=text                     # text | voice | both
+
+# Sicurezza API Flask (vuoto = auth disabilitata)
+CIPHER_API_TOKEN=
+```
+
+Google OAuth2: metti `credentials.json` in `secrets/`. Al primo avvio viene eseguita la flow OAuth2 e il token viene salvato in `secrets/token.json`.
+
+---
+
+## Canali supportati
+
+| Canale | Descrizione |
 |---|---|
-| `OPENROUTER_API_KEY` | **Obbligatorio** — da openrouter.ai/keys |
-| `OPENROUTER_MODEL` | Default: `anthropic/claude-sonnet-4-6` |
-| `TELEGRAM_BOT_TOKEN` | Token bot Telegram (da @BotFather) |
-| `TELEGRAM_ALLOWED_ID` | ID utente Telegram autorizzato |
-| `CIPHER_SERVER_URL` | URL del server (default: `http://100.127.57.5:5000`) |
-| `ELEVENLABS_API_KEY` | Per TTS voce |
-| `ELEVENLABS_VOICE_ID` | ID voce ElevenLabs |
-| `GREEN_API_INSTANCE_ID` | Instance ID Green API (WhatsApp) |
-| `GREEN_API_TOKEN` | Token Green API (WhatsApp) |
-| `VOSK_MODEL_PATH` | Percorso modello STT offline |
-| `VOSK_WAKE_MODEL_PATH` | Percorso modello STT per wake word (inglese) |
-| `WAKE_WORDS` | Wake word separate da virgola (default: `cipher,jarvis,ehi,...`) |
-| `INPUT_MODE` | `text` / `voice` / `both` |
-| `MIC_DEVICE_INDEX` | Indice dispositivo microfono (default: `-1` = auto) |
-| `SILENCE_TIMEOUT` | Secondi di silenzio prima di chiudere l'ascolto (default: `2.0`) |
-| `SERVER_PORT` | Porta server Flask (default: `5000`) |
-
-### Comportamento
-
-I file nella cartella `comportamento/` definiscono la personalità di Cipher.
-Vengono letti in ordine alfabetico e concatenati nel system prompt.
-
-```
-comportamento/
-├── 00_identity.txt      # Chi è Cipher, tono, carattere
-├── azioni.md            # Azioni web (web_fetch, web_explore_spa, ecc.)
-├── azioni.txt           # Tutte le azioni disponibili (calendario, fs, shell, ecc.)
-└── dev_protocol.txt     # Regole operative
-```
-
-Quando Simone chiede a Cipher "che obiettivi hai?", "che programmi hai?" o simili, Cipher elenca gli obiettivi attivi dal proprio contesto con una frase descrittiva per ciascuno. Se non ne ha, lo dice e aggiunge cosa vorrebbe esplorare.
+| Telegram | Interfaccia principale — messaggi testuali e vocali |
+| API REST | `POST /chat` — input programmatico (auth via `CIPHER_API_TOKEN`) |
+| CLI | `main.py` — terminale locale, modalità text o voice |
+| Voice in (Vosk) | STT offline, wake words: `cipher`, `jarvis`, `ehi`, `ci sei` |
+| Voice out (ElevenLabs) | TTS per risposte vocali su Telegram |
 
 ---
 
-## Avvio
+## Sistema di confidenza
 
-### Server (raccomandato — gestisce Telegram + API)
+`confidence_score` è un float 0.0–1.0 che misura quanto è cresciuto il rapporto. Cresce automaticamente dai segnali autentici rilevati in ogni conversazione. Non può scendere.
 
-```bash
-# Con systemd (autostart)
-sudo systemctl start cipher.service
-sudo systemctl start cipher-telegram.service
-sudo systemctl start cipher-funnel.service   # espone via Tailscale
-
-# Manuale
-source venv/bin/activate
-python server.py
-```
-
-### CLI locale
-
-```bash
-./run.sh                             # menu interattivo
-source venv/bin/activate
-python main.py --mode text           # solo tastiera
-python main.py --mode voice          # solo microfono
-python main.py --mode both           # tastiera + microfono
-python main.py --mode text --no-tts  # testo senza audio
-```
-
-**Comandi in-chat:**
-```
-resetta              → cancella la storia della sessione
-dimentica tutto      → cancella memoria + profilo
-ricorda che [fatto]  → salva manualmente un fatto
-esci / spegni        → spegne Cipher
-```
-
----
-
-## API Server
-
-Il server Flask espone queste route:
-
-| Metodo | Path | Descrizione |
+| Score | Livello | Comportamento di Cipher |
 |---|---|---|
-| `GET` | `/health` | Stato del server e modello attivo |
-| `POST` | `/chat` | `{"message": "..."}` → risposta di Cipher |
-| `GET` | `/memory` | Profilo utente corrente |
-| `POST` | `/reset` | Resetta la conversazione |
-| `POST` | `/stt` | Audio (body raw) → testo trascritto |
-| `POST` | `/wake` | Audio → `{"detected": bool}` wake word |
-| `POST` | `/tts` | `{"text": "..."}` → audio MP3 |
-| `GET` | `/consciousness/status` | Stato emotivo corrente |
-| `GET` | `/consciousness/thoughts` | Ultimi pensieri da `thoughts.md` |
-| `GET` | `/consciousness/goals` | Obiettivi attivi |
+| 0.0–0.2 | Conoscente | Cordiale ma misurato, niente intimità forzata |
+| 0.2–0.4 | Amico | Domande personali leggere, opinioni occasionali |
+| 0.4–0.6 | Amico stretto | Stati d'animo condivisi, ironia, riferimenti al passato |
+| 0.6–0.8 | Confidente | Emozioni aperte, domande profonde, usa il nome |
+| 0.8–1.0 | Migliore amico | Diretto, anticipa bisogni, storia condivisa implicita |
+
+Segnali rilevati automaticamente via Haiku: emozioni condivise, storie personali, soprannomi familiari, richieste di consiglio importanti, gratitudine, sessioni lunghe, streak di giorni consecutivi.
+
+Quando lo score supera 0.8 per la prima volta, Cipher propone il legame permanente.
 
 ---
 
-## Comandi Telegram
+## Sistema admin
 
-| Comando | Descrizione |
+Quando `confidence_score` raggiunge 0.8, Cipher propone di fissare una parola segreta. Questa crea `data/admin.json`, che contiene identità admin, confidence al momento del bond e la password hashata (SHA-256 + salt random 32 byte). Il file è protetto da checksum SHA-256.
+
+`admin.json` è l'unico file del sistema che non viene mai toccato da Tabula Rasa o pulizie automatiche.
+
+### Ripristino post-reset
+
+Dopo un Tabula Rasa, la memoria torna a zero ma il legame sopravvive. Per ripristinare il riconoscimento:
+
+```
+Admin+ParolaSegreta
+```
+
+Cipher verifica la password, ripristina il profilo e riconosce Simone.
+
+Per cambiare la parola segreta:
+
+```
+Admin+VecchiaParola+NuovaParola
+```
+
+---
+
+## Messaggi proattivi
+
+Cipher contatta Simone autonomamente in questi casi:
+
+| Tipo | Confidenza minima | Frequenza max | Note |
+|---|---|---|---|
+| Morning brief | >= 0.3 | 1 al giorno (7:00–8:00) | 5 scenari: compleanno, festivo, normale |
+| Check-in inattività | >= 0.4 | 4/giorno, 1/ora | Dopo 120 min senza messaggi; 0.3–0.4 → soppresso; <0.3 → delega a goal contact |
+| Goal tipo contact | < 0.3 | soggetto a DiscretionEngine | Solo con ≥3h inattività; guardrail post-generazione |
+| Notizie interessi | nessuna | 4/giorno, 1/ora | Soggetto a DiscretionEngine (anti-spam, ore attive) |
+| Calendar reminder | nessuna | illimitato (ore attive) | Escluso dal conteggio anti-spam |
+
+Regole comuni:
+- Nessun messaggio tra 23:00 e 7:00 (salvo urgenti)
+- Se il LLM non ha un aggancio concreto → risponde `SKIP`, niente viene inviato
+- `calendar_reminder` escluso dal conteggio anti-spam
+
+---
+
+## Comandi speciali Telegram
+
+| Comando | Effetto |
 |---|---|
-| `/start` | Attiva il bot |
-| `/reset` | Resetta la conversazione |
-| `/stato` | Stato emotivo e obiettivi attivi |
-| `/pensieri` | Ultimi pensieri autonomi |
-| `/obiettivi` | Lista obiettivi attivi |
-
-**Tipi di messaggio supportati:**
-- **Testo** → risposta diretta
-- **Vocale/Audio** → trascritto via Vosk → risposta
-- **Foto** → analizzata via Claude Vision → risposta
-- **Documento** → salvato in `uploads/`, Cipher chiede cosa fare
-
-**Gestione script:**
-```
-approva nomescript.py   → autorizza l'esecuzione
-revoca nomescript.py    → revoca l'autorizzazione
-lista script            → mostra tutti gli script nel registro
-```
-
----
-
-## Moduli
-
-| Modulo | Responsabilità |
-|---|---|
-| `brain.py` | Core — LLM, memory, dispatcher azioni |
-| `memory.py` | Profilo utente, conversazioni, contesto |
-| `consciousness_loop.py` | Loop autonomo — riflessione, obiettivi, esecuzione |
-| `self_reflection.py` | Auto-riflessione, stato emotivo, diario |
-| `goal_manager.py` | Generazione e gestione obiettivi autonomi |
-| `ethics_engine.py` | Livelli di permesso, consenso, apprendimento |
-| `discretion.py` | Decide quando e cosa inviare (ore, spam, efficacia) |
-| `episodic_memory.py` | Timeline eventi significativi con tag |
-| `cipher_interests.py` | Interessi propri di Cipher, intensità, decay |
-| `impact_tracker.py` | Traccia efficacia azioni proattive |
-| `pattern_learner.py` | Pattern comportamentali, previsioni |
-| `passive_monitor.py` | Monitor background — calendario, email, notizie |
-| `night_cycle.py` | Elaborazione notturna alle 3:00 |
-| `scheduler.py` | Briefing 7:30, digest 20:30, task ricorrenti |
-| `notifier.py` | Polling Telegram, timer, promemoria |
-| `reminders.py` | Gestione promemoria e task schedulati |
-| `actions.py` | Dispatcher tutte le azioni (web, cal, mail, file, shell) |
-| `file_engine.py` | Lettura e analisi file (PDF, Excel, CSV) |
-| `filesystem.py` | Operazioni filesystem sandboxate in `home/` |
-| `script_registry.py` | Registro script con approvazione |
-| `google_auth.py` | OAuth2 Google (Calendar + Gmail) |
-| `google_cal.py` | Integrazione Google Calendar |
-| `google_mail.py` | Integrazione Gmail |
-| `listener.py` | STT offline (Vosk) + wake word |
-| `text_input.py` | Input da tastiera (CLI) |
-| `voice.py` | TTS (ElevenLabs) |
-| `whatsapp.py` | Integrazione WhatsApp via Green API |
-
----
-
-## Struttura directory
-
-**File radice:** `server.py` entry point Flask, `main.py` entry point CLI, `cipher_bot.py` bot Telegram, `config.py` configurazione centralizzata, `credentials.json` / `token.json` OAuth2 Google.
-
-**`modules/`** — tutti i moduli Python. `brain.py` core LLM/memory/dispatcher; `consciousness_loop.py` loop autonomo; `self_reflection.py` stato emotivo e diario; `goal_manager.py` obiettivi; `ethics_engine.py` permessi e consenso; `discretion.py` decide quando/cosa inviare; `episodic_memory.py` timeline eventi; `cipher_interests.py` interessi propri con decay; `impact_tracker.py` efficacia azioni; `pattern_learner.py` previsioni comportamentali; `passive_monitor.py` monitor background cal/mail/news; `night_cycle.py` elaborazione notturna alle 3:00; `scheduler.py` briefing 7:30 e digest 20:30; `actions.py` dispatcher web/cal/mail/fs/shell; `file_engine.py` lettura PDF/Excel/CSV; `filesystem.py` operazioni fs sandboxate; `google_auth/cal/mail.py` integrazione Google; `listener.py` STT Vosk + wake word; `voice.py` TTS ElevenLabs; `whatsapp.py` Green API.
-
-**`memory/`** — dati persistenti generati a runtime: profilo utente, stato emotivo, interessi, episodi, obiettivi, pattern, autonomia etica, diario riflessioni, sessioni conversazione.
-
-**`comportamento/`** — system prompt di Cipher: identità e tono (`00_identity.txt`), azioni disponibili (`azioni.txt`, `azioni.md`), regole operative (`dev_protocol.txt`). Letti in ordine alfabetico e concatenati.
-
-**`apprendimento/`** — base di conoscenza appresa: arduino, cybersec, programmazione (C/C++/Java/Flutter/HTML/Python/AL), raspberry, unix, win, carte.
-
-**`home/`** — sandbox: unica directory dove Cipher può scrivere file ed eseguire script. **`uploads/`** — file ricevuti via Telegram/WhatsApp. **`voices/`** — audio TTS generati. **`models/`** — modelli Vosk STT.
-
-```
-cipher-server/
-├── server.py
-├── main.py
-├── cipher_bot.py
-├── config.py
-├── requirements.txt
-├── setup.sh / run.sh / run_server.sh
-├── .env
-├── .gitignore
-├── credentials.json
-├── token.json
-│
-├── modules/
-│   ├── brain.py
-│   ├── memory.py
-│   ├── consciousness_loop.py
-│   ├── self_reflection.py
-│   ├── goal_manager.py
-│   ├── ethics_engine.py
-│   ├── discretion.py
-│   ├── episodic_memory.py
-│   ├── cipher_interests.py
-│   ├── impact_tracker.py
-│   ├── pattern_learner.py
-│   ├── passive_monitor.py
-│   ├── night_cycle.py
-│   ├── scheduler.py
-│   ├── notifier.py
-│   ├── reminders.py
-│   ├── actions.py
-│   ├── file_engine.py
-│   ├── filesystem.py
-│   ├── script_registry.py
-│   ├── google_auth.py
-│   ├── google_cal.py
-│   ├── google_mail.py
-│   ├── listener.py
-│   ├── text_input.py
-│   ├── voice.py
-│   └── whatsapp.py
-│
-├── memory/
-│   ├── profile.json
-│   ├── cipher_state.json
-│   ├── cipher_interests.json
-│   ├── episodes.json
-│   ├── goals.json
-│   ├── goals.md
-│   ├── patterns.json
-│   ├── ethics_learned.json
-│   ├── ethics_log.md
-│   ├── thoughts.md
-│   ├── screenshots.md
-│   └── conversations/
-│
-├── comportamento/
-│   ├── 00_identity.txt
-│   ├── azioni.md
-│   ├── azioni.txt
-│   └── dev_protocol.txt
-│
-├── apprendimento/
-│   ├── arduino.txt
-│   ├── carte.txt
-│   ├── cybersec.txt
-│   ├── programmazione_AL.txt
-│   ├── programmazione_c.txt
-│   ├── programmazione_cpp.txt
-│   ├── programmazione_flutter.txt
-│   ├── programmazione_html.txt
-│   ├── programmazione_java.txt
-│   ├── programmazione_paython.txt
-│   ├── raspberry.txt
-│   ├── unix.txt
-│   └── win.txt
-│
-├── home/
-│   ├── allowed_scripts.json
-│   ├── backup_sd.sh
-│   ├── mkdir.sh
-│   ├── show_cipher.sh
-│   ├── touch.sh
-│   └── scripts/
-│       └── test.sh
-│
-├── uploads/
-├── voices/
-└── models/
-    ├── vosk-model-it-0.22/
-    ├── vosk-model-small-it-0.22/
-    ├── vosk-model-en-us-0.22/
-    └── vosk-model-small-en-us-0.15/
-```
+| `tabula rasa` | Reset completo memoria (chiede conferma) |
+| `Admin+Password` | Login admin: ripristina profilo post-reset |
+| `Admin+VecchiaPassword+NuovaPassword` | Cambio parola segreta |
+| `revoca autonomia` | Resetta tutti i permessi acquisiti |
+| `revoca autonomia [azione]` | Revoca permesso specifico |

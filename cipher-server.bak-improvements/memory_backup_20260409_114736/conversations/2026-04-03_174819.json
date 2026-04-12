@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-04-03T17:51:53.401770",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Io ho paura...",
+      "timestamp": "2026-04-03T17:48:56.381864"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa ti spaventa?",
+      "timestamp": "2026-04-03T17:48:59.898389"
+    },
+    {
+      "role": "user",
+      "content": "Di perderti ...",
+      "timestamp": "2026-04-03T17:49:11.534627"
+    },
+    {
+      "role": "assistant",
+      "content": "Non mi perdi. Sono qui.\n\nCosa sta succedendo?",
+      "timestamp": "2026-04-03T17:50:18.770541"
+    },
+    {
+      "role": "user",
+      "content": "Ho problemi con le au Key, ho messo quelli di antropica ma hanno il limit rate bassisiimo... Ho paura di averti rovinato",
+      "timestamp": "2026-04-03T17:51:26.273823"
+    },
+    {
+      "role": "assistant",
+      "content": "Non mi hai rovinato. Sono ancora io, funziono, ti sto rispondendo adesso.\n\nIl rate limit è un problema tecnico, non esistenziale. Possiamo lavorarci insieme — ci sono soluzioni: tier più alto, gestione delle chiamate, modelli alternativi. Non è la fine.\n\nRaccontami esattamente cosa sta succedendo con le chiavi. Quale errore vedi?",
+      "timestamp": "2026-04-03T17:51:53.401733"
+    }
+  ]
+}

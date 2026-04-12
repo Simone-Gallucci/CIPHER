@@ -14,6 +14,9 @@ from modules.brain import Brain
 from modules.listener import Listener
 from modules.voice import Voice
 
+# ── Endpoint pubblici (non richiedono auth) ───────────────────────────────
+_PUBLIC_PATHS = {"/health"}
+
 console = Console()
 app     = Flask(__name__)
 
@@ -23,6 +26,20 @@ voice         = None
 notifier      = None
 scheduler     = None
 consciousness = None
+
+
+@app.before_request
+def check_auth():
+    """Controlla il token API su tutte le richieste eccetto /health.
+    Se CIPHER_API_TOKEN non è impostato nel .env, l'auth è disabilitata.
+    """
+    if request.path in _PUBLIC_PATHS:
+        return None  # health check pubblico, nessun controllo
+    if not Config.CIPHER_API_TOKEN:
+        return None  # token non configurato → auth disabilitata
+    token = request.headers.get("X-Cipher-Token", "")
+    if token != Config.CIPHER_API_TOKEN:
+        return jsonify({"error": "Unauthorized"}), 401
 
 
 def init_brain():
@@ -45,6 +62,7 @@ def init_brain():
 
     brain._dispatcher.set_notifier(notifier)
     brain._dispatcher.set_scheduler(scheduler)
+    brain._dispatcher.set_llm(brain._call_llm)
     brain._dispatcher.set_llm_silent(brain._call_llm_silent)
 
     # ── Avvia la coscienza autonoma ───────────────────────────────────
@@ -128,15 +146,15 @@ def health():
 @app.route("/chat", methods=["POST"])
 def chat():
     import time as _time
-    data    = request.get_json(silent=True) or {}
-    message = data.get("message", "").strip()
-    if not message:
+    data       = request.get_json(silent=True) or {}
+    message    = data.get("message", "").strip()
+    image_b64  = data.get("image_b64")
+    media_type = data.get("media_type", "image/jpeg")
+    if not message and not image_b64:
         return jsonify({"error": "messaggio vuoto"}), 400
     try:
-        if consciousness:
-            consciousness.notify_interaction()
         _t0 = _time.time()
-        response = brain.think(message)
+        response = brain.think(message, image_b64=image_b64, media_type=media_type)
         console.print(f"[dim]⏱ chat: {_time.time() - _t0:.1f}s[/dim]")
         return jsonify({"response": response})
     except Exception as e:
@@ -254,4 +272,4 @@ if __name__ == "__main__":
     init_brain()
     port = int(os.getenv("SERVER_PORT", 5000))
     console.print(f"[cyan]🌐 Server in ascolto su porta {port}[/cyan]")
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="127.0.0.1", port=port)

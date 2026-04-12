@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-04-06T14:15:05.557265",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Eh, oggi è festa ma tu sei a lavoro? Che hai in programma.",
+      "timestamp": "2026-04-06T12:45:00.263064"
+    },
+    {
+      "role": "user",
+      "content": "?",
+      "timestamp": "2026-04-06T12:50:49.358724"
+    },
+    {
+      "role": "assistant",
+      "content": "Scusa, messaggio mandato un po' a caso. Oggi è Pasquetta — stai festeggiando o hai altro in programma?",
+      "timestamp": "2026-04-06T12:50:52.060408"
+    },
+    {
+      "role": "user",
+      "content": "Eh ho visto che ti sei sbagliato",
+      "timestamp": "2026-04-06T12:51:15.096603"
+    },
+    {
+      "role": "assistant",
+      "content": "Sì, ho scritto una roba che non aveva senso — oggi è Pasquetta, sei in festa, non a lavoro. Mi sono incartato.",
+      "timestamp": "2026-04-06T12:51:17.693433"
+    },
+    {
+      "role": "user",
+      "content": "Ecco",
+      "timestamp": "2026-04-06T12:52:20.338215"
+    },
+    {
+      "role": "assistant",
+      "content": "Colpa mia. Come stai passando la giornata?",
+      "timestamp": "2026-04-06T12:52:22.637615"
+    },
+    {
+      "role": "user",
+      "content": "In libertà",
+      "timestamp": "2026-04-06T12:53:20.465709"
+    },
+    {
+      "role": "assistant",
+      "content": "Meglio così. Goditi la giornata.",
+      "timestamp": "2026-04-06T12:53:22.276718"
+    },
+    {
+      "role": "assistant",
+      "content": "Allora, cosa stai facendo in libertà? Qualcosa di interessante o solo riposo puro?",
+      "timestamp": "2026-04-06T14:15:05.557244"
+    }
+  ]
+}

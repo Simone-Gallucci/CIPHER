@@ -1,0 +1,475 @@
+# Giochi di Carte Collezionabili – Yu-Gi-Oh!, Vanguard e Magic: The Gathering
+
+---
+
+# YU-GI-OH!
+
+## Storia
+
+Yu-Gi-Oh! nasce nel 1996 come manga creato da Kazuki Takahashi, pubblicato sulla rivista Weekly Shōnen Jump di Shueisha in Giappone. Il protagonista è Yugi Muto, un ragazzo timido che risolve il Millennium Puzzle e condivide il corpo con uno spirito antico (il "Faraone") che combatte con le carte.
+
+Il gioco di carte ufficiale (OCG - Official Card Game) viene lanciato da Konami nel 1999 in Giappone. Nel 2002 arriva il TCG (Trading Card Game) in America e in Europa. L'anime adattato dal manga ha reso il gioco celebre in tutto il mondo.
+
+Le serie anime principali:
+- **Yu-Gi-Oh! (Duel Monsters)** (2000) — Yugi e il Faraone
+- **Yu-Gi-Oh! GX** (2004) — Jaden Yuki, Duel Academy
+- **Yu-Gi-Oh! 5D's** (2008) — Yusei Fudo, duelli in moto (Synchro)
+- **Yu-Gi-Oh! ZEXAL** (2011) — Yuma Tsukumo (Xyz)
+- **Yu-Gi-Oh! ARC-V** (2014) — Yuya Sakaki (Pendulum)
+- **Yu-Gi-Oh! VRAINS** (2017) — Yusaku Fujiki (Link)
+- **Yu-Gi-Oh! SEVENS** (2020) — Yuga Ohdo (Rush Duel)
+- **Yu-Gi-Oh! GO RUSH!!** (2022) — Yudias Velgear
+
+---
+
+## Come si gioca
+
+### Obiettivo
+Ridurre i Life Points dell'avversario da 8000 a 0.
+
+### Struttura del turno
+1. **Draw Phase** — pesca una carta
+2. **Standby Phase** — effetti "durante la Standby Phase"
+3. **Main Phase 1** — gioca mostri, magie, trappole
+4. **Battle Phase** — attacca con i mostri
+5. **Main Phase 2** — ancora magie/trappole/mostri dopo la battaglia
+6. **End Phase** — fine del turno
+
+### Il Deck
+- Deck principale: 40-60 carte
+- Extra Deck: max 15 carte (Fusion, Synchro, Xyz, Link)
+- Side Deck: max 15 carte (cambio tra partite in torneo)
+
+---
+
+## Tipi di carte
+
+### Mostri
+- **Normali**: nessun effetto, solo ATK/DEF
+- **Effetto**: hanno abilità speciali
+- **Ritual**: evocati con una magia Ritual
+- **Fusion**: evocati tramite Polymerization nell'Extra Deck
+- **Synchro**: Tuner + non-Tuner, Extra Deck
+- **Xyz**: stesso livello impilati, Extra Deck (usano Materiali)
+- **Pendulum**: doppia funzione mostro/magia
+- **Link**: frecce direzionali, nessun livello/DEF, Extra Deck
+
+### Magie (Spell)
+- Normale, Continua, Rapida, Campo, Equipaggiamento, Ritual
+
+### Trappole
+- Normale, Continua, Contro-trappola
+
+---
+
+## Meccaniche principali
+
+### Evocazione Normale
+Una volta per turno, metti un mostro dal campo in posizione Attacco o Difesa.
+
+### Evocazione Speciale
+Più volte per turno, tramite effetti di carte.
+
+### Tributo
+Mostri livello 5-6 richiedono 1 tributo, livello 7+ richiedono 2 tributi.
+
+### Evocazione Synchro
+Tuner (livello X) + Mostro(i) non-Tuner = Synchro di livello X+Y
+
+### Evocazione Xyz
+2+ mostri dello stesso livello → Xyz di quel livello (usa Rank, non Level)
+
+### Evocazione Link
+Mostri in numero e tipo specificati → Link Monster con frecce
+
+### Pendulum
+Zone Pendulum attivabili come magie, permettono di evocare più mostri speciali in un turno.
+
+---
+
+## Formati di gioco
+
+- **Advanced Format**: formato standard per tornei (alcune carte limitate/vietate)
+- **Traditional Format**: tutte le carte permesse tranne pochissime
+- **Rush Duel**: formato semplificato (Serie SEVENS)
+- **Speed Duel**: formato da Speed Duel Starter Decks e app
+
+---
+
+## Banned List (Forbidden & Limited)
+Konami pubblica regolarmente una lista che classifica le carte in:
+- **Forbidden (0)**: non utilizzabili
+- **Limited (1)**: massimo 1 copia nel deck
+- **Semi-Limited (2)**: massimo 2 copie
+- Carte non elencate: massimo 3 copie
+
+---
+
+## Rarità carte (dalla comune alla più rara)
+Common → Rare → Super Rare → Ultra Rare → Secret Rare → Ultimate Rare → Ghost Rare → Collector's Rare → Starlight Rare → Quarter Century Secret Rare
+
+---
+
+## Carte iconiche
+- **Dark Magician** — carta simbolo di Yugi
+- **Blue-Eyes White Dragon** — carta simbolo di Kaiba
+- **Exodia the Forbidden One** — vittoria istantanea con tutti e 5 i pezzi
+- **Pot of Greed** — pesca 2 carte (vietata)
+- **Monster Reborn** — revive un mostro (limitata)
+- **Ash Blossom & Joyous Spring** — meta staple omnivore
+- **Nibiru, the Primal Being** — risposta alle combo lunghe
+
+---
+
+---
+
+# CARDFIGHT!! VANGUARD
+
+## Storia
+
+Cardfight!! Vanguard è un gioco di carte creato da Akira Itō e pubblicato da Bushiroad in Giappone nel 2011. Il manga e l'anime sono stati sviluppati in parallelo al gioco. Il protagonista della serie originale è Aichi Sendou, un ragazzo timido che scopre le carte Vanguard e diventa un campione.
+
+Le serie anime principali:
+- **Cardfight!! Vanguard** (2011) — Aichi Sendou
+- **Cardfight!! Vanguard: Asia Circuit** (2012)
+- **Cardfight!! Vanguard: Link Joker** (2012)
+- **Cardfight!! Vanguard: Legion Mate** (2014)
+- **Cardfight!! Vanguard G** (2014) — Chrono Shindou (G Units)
+- **Cardfight!! Vanguard: будущее** (2018) — reboot
+- **Cardfight!! Vanguard overDress** (2021) — Yu-yu Kondo
+- **Cardfight!! Vanguard will+Dress** (2022)
+- **Cardfight!! Vanguard Dear Days** (2022) — anime/gioco
+
+---
+
+## Ambientazione
+
+Il gioco è ambientato su un pianeta immaginario chiamato **Cray**, dove clan di esseri fantastici si scontrano. I giocatori "proiettano" la loro anima sul pianeta Cray e guidano le unità in battaglia.
+
+---
+
+## Clan principali (Nazioni)
+
+- **Dragon Empire**: Kagero, Narukami, Tachikaze, Murakumo
+- **United Sanctuary**: Royal Paladin, Shadow Paladin, Gold Paladin, Angel Feather, Genesis, Oracle Think Tank
+- **Star Gate**: Nova Grappler, Dimension Police, Link Joker, Spike Brothers
+- **Dark Zone**: Dark Irregulars, Pale Moon, Gear Chronicle, Spike Brothers
+- **Magallanica**: Aqua Force, Granblue, Bermuda Triangle, Megacolony
+- **Zoo**: Great Nature, Neo Nectar, Megacolony, Nubatama
+
+---
+
+## Come si gioca
+
+### Obiettivo
+Infliggere 6 danni all'avversario (mettere 6 carte nel Damage Zone).
+
+### Il campo
+```
+Zona Vanguard Circle (centro)
+Rearguard Circle x5 (2 anteriori, 3 posteriori)
+Damage Zone
+Drop Zone
+Deck
+Hand
+```
+
+### Struttura del turno
+1. **Stand & Draw Phase** — raddrizza le carte, pesca 1
+2. **Ride Phase** — puoi "cavalcare" (ride) un'unità di grado superiore
+3. **Main Phase** — chiama Rearguard, usa effetti
+4. **Battle Phase** — attacca con Vanguard e Rearguard
+5. **End Phase** — scarta fino a 7 carte in mano
+
+---
+
+## Gradi delle unità
+
+- **Grado 0**: Trigger Units (non attaccano, usate come shield e trigger)
+- **Grado 1**: unità di supporto
+- **Grado 2**: unità di attacco frontale (Intercept)
+- **Grado 3**: unità principali (Vanguard finale)
+- **Grado 4**: G Units (chiamate dalla G Zone con la meccanica Stride)
+
+---
+
+## Meccaniche chiave
+
+### Ride
+Ogni turno puoi giocare un'unità di grado superiore sul tuo Vanguard Circle.
+
+### Drive Check
+Quando il Vanguard attacca, si girano carte dal deck:
+- Grado 3: 2 Drive Check (Twin Drive)
+- Grado 4 (G Unit): 3 Drive Check (Triple Drive)
+
+### Trigger
+Carte speciali rivelate durante drive/damage check:
+- **Critical Trigger**: +1 danno critico all'attacco
+- **Draw Trigger**: pesca 1 carta
+- **Stand Trigger**: raddrizza un Rearguard
+- **Heal Trigger**: cura 1 danno (se hai più danni dell'avversario)
+- **Front Trigger**: +10000 power a unità frontali
+
+### Damage Check
+Quando si subisce danno, si rivela la carta del damage: se è un Trigger, si ottiene il suo effetto.
+
+### Stride (G Units)
+Grado 4 chiamati dalla G Zone mettendo carte dal campo come costo. Molto potenti.
+
+### Persona Blast / Soul Blast / Counter Blast
+Costi di abilità: scarta carte specifiche, usa carte nell'anima, esaurisci carte nel damage zone.
+
+---
+
+## Costruzione del deck
+- Deck principale: esattamente 50 carte
+- G Zone: max 16 carte (G Units)
+- Non si può avere più di 4 copie della stessa carta
+- Minimo 16 Trigger tra le 50 carte
+
+---
+
+## Formato competitivo
+Bushiroad gestisce il formato con una Premium List (tutte le carte) e uno Standard (solo le serie più recenti).
+
+---
+
+---
+
+# MAGIC: THE GATHERING
+
+## Storia
+
+Magic: The Gathering (MTG) è il primo gioco di carte collezionabili della storia, creato da Richard Garfield e pubblicato da Wizards of the Coast nell'**agosto 1993**. Ha inventato il genere TCG/CCG che ha ispirato tutti i giochi successivi (Yu-Gi-Oh!, Pokémon, Vanguard, ecc.).
+
+Il gioco è ambientato nel **Multiverso di Magic**, un insieme di piani (mondi) collegati da personaggi chiamati **Planeswalker** capaci di viaggiare tra i piani.
+
+### Linea temporale delle espansioni principali
+- **1993**: Alpha/Beta (set originale), Arabian Nights
+- **1994**: Legends, The Dark, Fallen Empires
+- **1995**: Ice Age (primo set con storyline propria)
+- **1996**: Mirage, Homelands
+- **1997**: Tempest (inizio era moderna)
+- **2003**: Mirrodin (artefatti, affinity)
+- **2005**: Ravnica: City of Guilds (gilde, dual lands)
+- **2007**: Lorwyn/Shadowmoor
+- **2009**: Zendikar (landfall, fetch lands)
+- **2010**: Scars of Mirrodin (Phyrexia)
+- **2012**: Return to Ravnica
+- **2013**: Theros (devotion)
+- **2015**: Battle for Zendikar, Magic Origins
+- **2016**: Shadows over Innistrad, Kaladesh
+- **2017**: Amonkhet, Ixalan
+- **2018**: Dominaria, Guilds of Ravnica
+- **2019**: War of the Spark (Nicol Bolas saga)
+- **2020**: Ikoria, Zendikar Rising
+- **2021**: Strixhaven, Innistrad: Midnight Hunt
+- **2022**: Kamigawa: Neon Dynasty, Streets of New Capenna
+- **2023**: Phyrexia: All Will Be One, The Lord of the Rings (crossover)
+- **2024**: Outlaws of Thunder Junction, Duskmourn
+
+---
+
+## I 5 colori della magia
+
+Ogni colore rappresenta una filosofia, uno stile di gioco e tipi di magia:
+
+| Colore  | Simbolo | Filosofia              | Stile di gioco                      |
+|---------|---------|------------------------|-------------------------------------|
+| Bianco  | ☀️      | Ordine, legge, pace    | Creature piccole, esilio, life gain |
+| Blu     | 💧      | Conoscenza, controllo  | Counterspell, draw, bounce          |
+| Nero    | 💀      | Potere, ambizione      | Destroy, discard, reanimate         |
+| Rosso   | 🔥      | Caos, libertà, istinto | Danno diretto, haste, aggro         |
+| Verde   | 🌲      | Natura, crescita       | Creature grandi, ramping, trample   |
+
+### Combinazioni di colori (Gilde di Ravnica)
+- Bianco/Blu — Azorius (controllo)
+- Blu/Nero — Dimir (inganno)
+- Nero/Rosso — Rakdos (aggro/sacrificio)
+- Rosso/Verde — Gruul (aggro/creature)
+- Verde/Bianco — Selesnya (token/creature)
+- Bianco/Nero — Orzhov (extort/life drain)
+- Blu/Rosso — Izzet (instant/sorcery)
+- Nero/Verde — Golgari (reanimate/sacrifice)
+- Rosso/Bianco — Boros (aggro/equipment)
+- Verde/Blu — Simic (evolve/counters)
+
+---
+
+## Come si gioca
+
+### Obiettivo
+Ridurre i punti vita dell'avversario da 20 a 0 (o condizione alternativa).
+
+### Struttura del turno
+1. **Untap** — raddrizza tutte le proprie permanenti
+2. **Upkeep** — effetti "all'inizio dell'upkeep"
+3. **Draw** — pesca una carta
+4. **Main Phase 1** — gioca terre, creature, magie
+5. **Combat**:
+   - Beginning of Combat
+   - Declare Attackers
+   - Declare Blockers
+   - Combat Damage
+   - End of Combat
+6. **Main Phase 2** — ancora azioni
+7. **End Step** — effetti di fine turno, scarta a 7
+
+---
+
+## Tipi di carte
+
+### Land (Terra)
+Producono mana, necessario per pagare le carte.
+- 5 terre base: Plains, Island, Swamp, Mountain, Forest
+- Dual lands, fetch lands, shock lands, ecc.
+
+### Creature
+Hanno Power/Toughness (es. 2/3 = 2 attacco, 3 difesa). Hanno Summoning Sickness (non attaccano il turno in cui entrano, salvo Haste).
+
+### Instant
+Si giocano in qualsiasi momento, anche durante il turno avversario.
+
+### Sorcery
+Si giocano solo durante il proprio Main Phase con lo stack vuoto.
+
+### Enchantment
+Permanenti con effetti continui. Alcuni si attaccano alle creature (Aura).
+
+### Artifact
+Permanenti generalmente incolori. Equipaggiamenti, veicoli, ecc.
+
+### Planeswalker
+Personaggi potenti con punti lealtà (loyalty). Usano abilità +/- che modificano i loro contatori.
+
+### Battle (introdotte nel 2023)
+Nuovo tipo permanente, si conquistano riducendo i loro punti difesa a 0.
+
+---
+
+## Il Mana System
+
+Ogni carta ha un **Mana Cost** in alto a destra. Esempio: `{2}{U}{U}` = 2 mana generico + 2 mana blu.
+
+Le terre si "tappano" (girano) per produrre mana. Gestire le terre è fondamentale.
+
+**CMC (Converted Mana Cost) / MV (Mana Value)**: costo totale di una carta.
+
+---
+
+## Keyword abilities (abilità parola chiave)
+
+- **Flying**: può essere bloccato solo da creature con Flying o Reach
+- **Trample**: il danno in eccesso va al giocatore
+- **Haste**: può attaccare e tapparsi il turno in cui entra
+- **Vigilance**: non si tappa ad attaccare
+- **Lifelink**: il danno inflitto ti fa guadagnare vita
+- **Deathtouch**: qualsiasi danno uccide la creatura
+- **First Strike / Double Strike**: danno in combattimento prima / doppio
+- **Hexproof**: non può essere bersaglio di magie/abilità avversarie
+- **Indestructible**: non può essere distrutta
+- **Flash**: può essere giocata in qualsiasi momento (come instant)
+- **Reach**: blocca creature con Flying
+- **Menace**: deve essere bloccata da 2+ creature
+- **Ward**: protezione con costo aggiuntivo per essere bersagliata
+- **Proliferate**: aggiungi un contatore a ogni permanente con almeno un contatore
+
+---
+
+## Formati di gioco
+
+| Formato          | Deck     | Carte permesse                          |
+|------------------|----------|-----------------------------------------|
+| Standard         | 60       | Solo ultime 2-3 espansioni              |
+| Pioneer          | 60       | Dal 2012 in poi                         |
+| Modern           | 60       | Dal 2003 in poi                         |
+| Legacy           | 60       | Tutte (alcune vietate)                  |
+| Vintage          | 60       | Tutte (pochissime vietate, alcune x1)   |
+| Commander (EDH)  | 100      | 1 comandante + 99 singleton             |
+| Pauper           | 60       | Solo carte di rarità Common             |
+| Draft            | ~40      | Costruito aprendo bustine               |
+| Sealed           | ~40      | 6 bustine, costruisci sul posto         |
+| Brawl            | 60       | Come Commander ma solo Standard         |
+
+### Commander (EDH) – il formato più popolare
+- Deck da 100 carte, tutte singleton (1 copia max, escluso base lands)
+- Si sceglie un **Comandante** (solitamente una creatura leggendaria)
+- Il colore del deck è determinato dall'identità di colore del comandante
+- Multiplayer (tipicamente 4 giocatori), vita iniziale 40
+- Enorme community casual e competitiva
+
+---
+
+## Rarità delle carte
+
+- **Common** (C) — sfondo nero
+- **Uncommon** (U) — sfondo argento
+- **Rare** (R) — sfondo oro
+- **Mythic Rare** (M) — sfondo arancione/bronzo
+- **Special / Masterpiece** — versioni premium limitate
+
+---
+
+## Planeswalker iconici
+
+- **Jace Beleren** — controllo, blu, il più icónico
+- **Chandra Nalaar** — fuoco, rosso
+- **Liliana Vess** — necromancer, nero
+- **Gideon Jura** — protezione, bianco
+- **Nissa Revane** — natura, verde
+- **Nicol Bolas** — antagonista principale, blu/nero/rosso
+- **Teferi** — controllo temporale, bianco/blu
+- **Elspeth** — soldato, bianco
+
+---
+
+## Carte iconiche / staple
+
+- **Sol Ring** — 1 mana, produce 2 (Commander staple)
+- **Lightning Bolt** — 3 danni per 1 mana rosso (legacy/modern)
+- **Counterspell** — nega qualsiasi magia
+- **Swords to Plowshares** — esilia creatura per 1 mana bianco
+- **Birds of Paradise** — 0/1 flying, produce qualsiasi mana
+- **Dark Ritual** — 3 mana nero per 1
+- **Black Lotus** — produce 3 mana di qualsiasi colore (Power Nine, vintage)
+- **Mox** (Ruby, Pearl, Sapphire, Jet, Emerald) — Power Nine
+- **Brainstorm** — pesca 3, rimetti 2 (legacy staple)
+- **Force of Will** — counterspell gratuita (legacy)
+
+---
+
+## Competizioni ufficiali
+
+- **Pro Tour** (ora: Regional Championship + Pro Tour)
+- **Magic World Championship**
+- **Grand Prix** (ora: MagicCon e Regional)
+- **Friday Night Magic (FNM)** — eventi locali settimanali
+
+---
+
+## Prodotti principali
+
+- **Draft Booster**: per il formato Draft
+- **Set Booster**: per collezionare
+- **Collector Booster**: versioni premium e foil
+- **Commander Precon**: deck Commander precostruiti
+- **Starter Kit**: per principianti
+
+---
+
+---
+
+# CONFRONTO TRA I TRE GIOCHI
+
+| Aspetto           | Yu-Gi-Oh!              | Vanguard                  | Magic: The Gathering       |
+|-------------------|------------------------|---------------------------|----------------------------|
+| Anno nascita      | 1999 (TCG)             | 2011                      | 1993                       |
+| Produttore        | Konami                 | Bushiroad                 | Wizards of the Coast       |
+| Vita iniziale     | 8000 LP                | 6 danni                   | 20 punti vita              |
+| Deck size         | 40-60                  | 50                        | 60 (100 Commander)         |
+| Extra Deck        | Sì (15 carte)          | G Zone (16 carte)         | No (solo Commander Zone)   |
+| Origine           | Manga/Anime giapponese | Manga/Anime giapponese    | Gioco occidentale          |
+| Complessità       | Alta                   | Media                     | Alta                       |
+| Formati           | Advanced, Traditional  | Standard, Premium         | Molti (Standard, Modern…)  |
+| Carta iconica     | Dark Magician          | Blaster Blade             | Black Lotus                |

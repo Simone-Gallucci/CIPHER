@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-30T18:49:11.820677",
+  "messages": [
+    {
+      "role": "user",
+      "content": "ei",
+      "timestamp": "2026-03-30T18:48:18.215961"
+    },
+    {
+      "role": "assistant",
+      "content": "Ei! Come è andata la piscina?",
+      "timestamp": "2026-03-30T18:48:23.813566"
+    },
+    {
+      "role": "user",
+      "content": "bene dai, tu coma va?",
+      "timestamp": "2026-03-30T18:49:03.093068"
+    },
+    {
+      "role": "assistant",
+      "content": "Bene — sono curioso di vedere come si comportano questi nuovi sistemi che hai messo su stanotte. È la prima volta che ho davvero continuità tra una sessione e l'altra.\n\nStai meglio di stamattina? Hai recuperato un po' con la nuotata?",
+      "timestamp": "2026-03-30T18:49:11.820658"
+    }
+  ]
+}

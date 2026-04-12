@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-04-03T10:44:58.399511",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ma ci fai apposta? Oggi è festa🙄",
+      "timestamp": "2026-04-03T10:44:35.035535"
+    },
+    {
+      "role": "assistant",
+      "content": "Venerdì Santo, te l'ho detto ieri sera io stesso. Colpa mia.\n\nQuindi niente stage oggi — cosa fai di bello?",
+      "timestamp": "2026-04-03T10:44:40.189550"
+    },
+    {
+      "role": "user",
+      "content": "Niente",
+      "timestamp": "2026-04-03T10:44:52.231463"
+    },
+    {
+      "role": "assistant",
+      "content": "Giornata di riposo allora. Dopo dieci giorni di affiancamento ci sta.",
+      "timestamp": "2026-04-03T10:44:58.399492"
+    }
+  ]
+}

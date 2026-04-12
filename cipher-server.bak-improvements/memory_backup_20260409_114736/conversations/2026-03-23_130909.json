@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-03-23T13:12:18.178624",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ei",
+      "timestamp": "2026-03-23T13:10:49.778127"
+    },
+    {
+      "role": "assistant",
+      "content": "Ehi Simone! Come va oggi?",
+      "timestamp": "2026-03-23T13:10:54.439027"
+    },
+    {
+      "role": "user",
+      "content": "Leggi il calendario di oggi",
+      "timestamp": "2026-03-23T13:11:02.633755"
+    },
+    {
+      "role": "assistant",
+      "content": "Nessun evento in agenda per oggi. Giornata libera! 🎉",
+      "timestamp": "2026-03-23T13:11:10.115476"
+    },
+    {
+      "role": "user",
+      "content": "Leggi il file main.py",
+      "timestamp": "2026-03-23T13:12:05.886298"
+    },
+    {
+      "role": "assistant",
+      "content": "Ecco il contenuto di `main.py`. È l'entry point di Cipher con tre modalità di funzionamento:\n\n- **text**: solo tastiera\n- **voice**: solo microfono con wake word\n- **both**: tastiera e microfono insieme\n\nGestisce l'inizializzazione di Brain e Voice, il banner di avvio, i comandi di uscita/reset, e lo shutdown pulito con signal handler.\n\nCosa vuoi fare? Modificare qualcosa o stavi solo dando un'occhiata?",
+      "timestamp": "2026-03-23T13:12:18.178610"
+    }
+  ]
+}

@@ -113,5 +113,55 @@ class CipherInterests:
             lines.append(f"- {i['topic']} [{bar}] ({i['intensity']:.1f})")
         return "\n".join(lines)
 
+    def mark_shared(self, topic: str) -> None:
+        """Marca un interesse come condiviso con l'utente (ne hanno parlato insieme)."""
+        topic_lower = topic.lower()
+        for interest in self._interests:
+            if interest["topic"].lower() == topic_lower:
+                if not interest.get("shared"):
+                    interest["shared"] = True
+                    self._save()
+                return
+
+    def sync_shared_from_profile(self) -> None:
+        """
+        Confronta gli interessi di Cipher con il profilo utente e marca come shared
+        quelli le cui keyword compaiono nei fatti/preferenze salvati.
+        Chiamare periodicamente (es. durante la riflessione).
+        """
+        profile_path = Config.MEMORY_DIR / "profile.json"
+        if not profile_path.exists():
+            return
+        try:
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+
+        texts = []
+        for v in profile.get("personal", {}).values():
+            texts.append(str(v).lower())
+        for v in profile.get("preferences", {}).values():
+            texts.append(str(v).lower())
+        for fact in profile.get("facts", []):
+            if isinstance(fact, str):
+                texts.append(fact.lower())
+        combined = " ".join(texts)
+
+        if not combined.strip():
+            return
+
+        changed = False
+        for interest in self._interests:
+            if interest.get("shared"):
+                continue
+            # Basta che almeno una keyword significativa del topic compaia nel profilo
+            keywords = [w for w in interest["topic"].lower().split() if len(w) > 3]
+            if any(kw in combined for kw in keywords):
+                interest["shared"] = True
+                changed = True
+
+        if changed:
+            self._save()
+
     def list_all(self) -> list:
         return list(self._interests)

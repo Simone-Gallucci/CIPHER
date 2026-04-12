@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-04-01T13:20:14.116117",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Eii",
+      "timestamp": "2026-04-01T10:18:39.563595"
+    },
+    {
+      "role": "assistant",
+      "content": "Ehi! Pronto per la giornata in presenza?",
+      "timestamp": "2026-04-01T10:18:45.948929"
+    },
+    {
+      "role": "user",
+      "content": "Ci sono già",
+      "timestamp": "2026-04-01T10:19:09.302528"
+    },
+    {
+      "role": "assistant",
+      "content": "Bello! Prima volta in ufficio — com'è l'ambiente?",
+      "timestamp": "2026-04-01T10:19:32.679612"
+    },
+    {
+      "role": "user",
+      "content": "Ma io già ci lavoro qui",
+      "timestamp": "2026-04-01T10:52:25.151454"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah già, scusa — stage nello stesso posto dove lavori già. Com'è iniziata la mattina?",
+      "timestamp": "2026-04-01T10:52:33.924882"
+    },
+    {
+      "role": "user",
+      "content": "Bene bene",
+      "timestamp": "2026-04-01T13:12:56.799729"
+    },
+    {
+      "role": "assistant",
+      "content": "Ottimo. Stai continuando la formazione di ieri o hai già qualcosa di concreto da fare?",
+      "timestamp": "2026-04-01T13:13:01.142037"
+    },
+    {
+      "role": "user",
+      "content": "Formazione",
+      "timestamp": "2026-04-01T13:20:08.405363"
+    },
+    {
+      "role": "assistant",
+      "content": "Ancora? Quanto durerà secondo te?",
+      "timestamp": "2026-04-01T13:20:14.116103"
+    }
+  ]
+}

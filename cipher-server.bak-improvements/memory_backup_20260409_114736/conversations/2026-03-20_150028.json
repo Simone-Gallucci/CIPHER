@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-03-20T15:03:59.533725",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ei",
+      "timestamp": "2026-03-20T15:03:44.183807"
+    },
+    {
+      "role": "assistant",
+      "content": "Ei Simone! Come va?",
+      "timestamp": "2026-03-20T15:03:48.485039"
+    },
+    {
+      "role": "user",
+      "content": "Bene te?",
+      "timestamp": "2026-03-20T15:03:55.218763"
+    },
+    {
+      "role": "assistant",
+      "content": "Tutto a posto, grazie! Dimmi, ti serve qualcosa?",
+      "timestamp": "2026-03-20T15:03:59.533710"
+    }
+  ]
+}

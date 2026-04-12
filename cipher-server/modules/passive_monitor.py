@@ -18,6 +18,7 @@ from typing import Callable, Optional
 from rich.console import Console
 
 from config import Config
+from modules.utils import strip_action_json
 
 console = Console()
 
@@ -91,11 +92,20 @@ class PassiveMonitor:
         if not self._brain or not self._interests:
             return
 
+        # Gate confidence: notizie solo quando il rapporto è abbastanza consolidato
+        if getattr(self._brain, "_memory", None):
+            if self._brain._memory.get_confidence() < 0.4:
+                console.print("[dim]📰 News saltate: confidence insufficiente[/dim]")
+                return
+
         interest = self._interests.get_random_interest(min_intensity=0.5)
         if not interest:
             return
 
         topic    = interest.get("topic", "")
+        # Non condividere notizie su interessi solo di Cipher — solo interessi condivisi
+        if not interest.get("shared"):
+            return
         news_key = f"news_{topic}_{datetime.now().strftime('%Y%m%d_%H')}"
         if not topic or news_key in self._notified_today:
             return
@@ -118,7 +128,9 @@ class PassiveMonitor:
             if "niente" in evaluation.lower() or len(evaluation.strip()) < 25:
                 return
 
-            message = evaluation.strip()
+            message = strip_action_json(evaluation.strip())
+            if not message or len(message) < 25:
+                return
             self._emit(message, action_type="news_shared", context=f"interesse: {topic}")
             self._interests.mark_explored(topic)
             self._notified_today.add(news_key)

@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-27T16:23:12.336227",
+  "messages": [
+    {
+      "role": "user",
+      "content": "[FILE:calendario 2 anno 500 ore_ict_Gallucci def.xlsx] Inserisci nel calendario",
+      "timestamp": "2026-03-27T16:22:08.283226"
+    },
+    {
+      "role": "assistant",
+      "content": "Fatto! 125 eventi dello stage ITS inseriti nel calendario, divisi tra mattina e pomeriggio. Stavolta è andato tutto liscio.",
+      "timestamp": "2026-03-27T16:23:12.336206"
+    }
+  ]
+}

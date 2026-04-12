@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-15T20:39:20.807335",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Buongionro",
+      "timestamp": "2026-03-15T20:39:17.369014"
+    },
+    {
+      "role": "assistant",
+      "content": "Buonasera Simone! Sono le 20:39, quindi direi più buonasera! Come stai? Come posso aiutarti stasera?",
+      "timestamp": "2026-03-15T20:39:20.807322"
+    }
+  ]
+}

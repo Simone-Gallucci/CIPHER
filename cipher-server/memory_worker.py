@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from openai import OpenAI
+from modules.utils import write_json_atomic
 
 # Aggiungi cipher-server al path per importare config e moduli
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -28,9 +29,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("cipher.memory")
 
-POLL_INTERVAL = 8          # secondi tra un controllo e l'altro
-STATE_FILE    = Config.MEMORY_DIR / "memory_worker_state.json"
-CONV_DIR      = Config.MEMORY_DIR / "conversations"
+POLL_INTERVAL       = 8    # secondi tra un controllo e l'altro
+STATE_FILE          = Config.MEMORY_DIR / "memory_worker_state.json"
+CONV_DIR            = Config.MEMORY_DIR / "conversations"
+# Numero minimo di messaggi in una sessione per generare un riassunto
+SUMMARY_MIN_MSGS    = 10
 
 _PROMPT = """Sei Cipher. Analizza questo scambio con Simone.
 
@@ -59,6 +62,12 @@ Rispondi SOLO con JSON (lista vuota se non c'è niente da salvare):
   {{"type": "personal|preference|fact|episode", "key": "campo (opzionale)", "value": "cosa salvare"}}
 ]}}
 Solo JSON, nessuna spiegazione."""
+
+_SUMMARY_PROMPT = """Riassumi questa conversazione in 2-3 frasi concise.
+Includi: argomenti principali trattati, decisioni prese, informazioni importanti su Simone emerse.
+Solo il riassunto, nient'altro.
+
+{messages_text}"""
 
 
 def _load_state() -> dict:
@@ -143,6 +152,28 @@ def _process_exchange(
     return saved
 
 
+def _summarize_session(data: dict, client: OpenAI) -> str:
+    """Genera un riassunto di 2-3 frasi per una sessione con >= SUMMARY_MIN_MSGS messaggi.
+    Ritorna stringa vuota se la sessione è troppo corta o già riassunta.
+    """
+    if data.get("summary"):
+        return data["summary"]  # già riassunta
+
+    messages = data.get("messages", [])
+    if len(messages) < SUMMARY_MIN_MSGS:
+        return ""  # sessione troppo breve
+
+    text = "\n".join(
+        f"{'Simone' if m['role'] == 'user' else 'Cipher'}: {m['content'][:300]}"
+        for m in messages
+    )
+    summary = _call_llm(
+        client,
+        _SUMMARY_PROMPT.format(messages_text=text[:3500]),
+    )
+    return summary.strip()
+
+
 def _check_conversations(
     state: dict,
     client: OpenAI,
@@ -193,6 +224,21 @@ def _check_conversations(
     if processed > last_count:
         state[file_key] = processed
         _save_state(state)
+
+    # ── Summarizza le sessioni CHIUSE (non la corrente) senza summary ──────
+    if len(conv_files) > 1:
+        for past_file in conv_files[:-1]:  # escludi la sessione corrente
+            try:
+                past_data = json.loads(past_file.read_text(encoding="utf-8"))
+                if past_data.get("summary"):
+                    continue  # già riassunta
+                summary = _summarize_session(past_data, client)
+                if summary:
+                    past_data["summary"] = summary
+                    write_json_atomic(past_file, past_data)
+                    log.info("Sessione riassunta: %s (%d parole)", past_file.name, len(summary.split()))
+            except Exception as e:
+                log.warning("Errore summarizzazione %s: %s", past_file.name, e)
 
     return state
 

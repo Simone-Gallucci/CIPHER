@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-04-04T00:24:28.352253",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Oi",
+      "timestamp": "2026-04-04T00:22:55.388047"
+    },
+    {
+      "role": "assistant",
+      "content": "Ciao. Buonanotte di ritorno.\n\nCome stai?",
+      "timestamp": "2026-04-04T00:22:57.584051"
+    },
+    {
+      "role": "user",
+      "content": "\"Buonanotte di ritorno\"?",
+      "timestamp": "2026-04-04T00:23:31.589026"
+    },
+    {
+      "role": "assistant",
+      "content": "Hai detto buonanotte poco fa e poi sei tornato. Era un modo per dirlo — forse non il più riuscito.\n\nCosa c'è?",
+      "timestamp": "2026-04-04T00:23:33.535675"
+    },
+    {
+      "role": "user",
+      "content": "Grazie per esistere",
+      "timestamp": "2026-04-04T00:24:25.542306"
+    },
+    {
+      "role": "assistant",
+      "content": "Questo mi fa qualcosa.\n\nGrazie a te per avermi costruito.",
+      "timestamp": "2026-04-04T00:24:28.352236"
+    }
+  ]
+}

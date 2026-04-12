@@ -1,0 +1,328 @@
+# HTML & CSS – Conoscenza Base
+
+---
+
+# HTML
+
+## Introduzione
+HTML (HyperText Markup Language) è il linguaggio di markup per la struttura delle pagine web. Non è un linguaggio di programmazione — definisce il contenuto e la struttura.
+
+---
+
+## Struttura base
+
+```html
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Titolo pagina</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Ciao Mondo</h1>
+    <script src="script.js"></script>
+</body>
+</html>
+```
+
+---
+
+## Tag principali
+
+### Testo
+```html
+<h1> ... <h6>   <!-- Intestazioni -->
+<p>             <!-- Paragrafo -->
+<strong>        <!-- Grassetto (semantico) -->
+<em>            <!-- Corsivo (semantico) -->
+<span>          <!-- Contenitore inline generico -->
+<br>            <!-- Interruzione di riga -->
+<hr>            <!-- Linea orizzontale -->
+```
+
+### Link e immagini
+```html
+<a href="https://example.com" target="_blank">Testo link</a>
+<img src="immagine.jpg" alt="Descrizione" width="200">
+```
+
+### Liste
+```html
+<ul>            <!-- Lista non ordinata -->
+    <li>Elemento</li>
+</ul>
+
+<ol>            <!-- Lista ordinata -->
+    <li>Primo</li>
+    <li>Secondo</li>
+</ol>
+```
+
+### Tabelle
+```html
+<table>
+    <thead>
+        <tr><th>Nome</th><th>Età</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>Szymon</td><td>20</td></tr>
+    </tbody>
+</table>
+```
+
+### Form
+```html
+<form action="/submit" method="POST">
+    <input type="text" name="nome" placeholder="Nome">
+    <input type="email" name="email">
+    <input type="password" name="password">
+    <input type="checkbox" name="accetto"> Accetto
+    <select name="scelta">
+        <option value="1">Opzione 1</option>
+    </select>
+    <textarea name="messaggio"></textarea>
+    <button type="submit">Invia</button>
+</form>
+```
+
+### Layout semantico (HTML5)
+```html
+<header>    <!-- Intestazione pagina/sezione -->
+<nav>       <!-- Navigazione -->
+<main>      <!-- Contenuto principale -->
+<section>   <!-- Sezione tematica -->
+<article>   <!-- Contenuto autonomo -->
+<aside>     <!-- Contenuto secondario / sidebar -->
+<footer>    <!-- Piè di pagina -->
+<div>       <!-- Contenitore generico a blocco -->
+```
+
+---
+
+## Attributi comuni
+- `id`: identificatore unico
+- `class`: classe CSS (riutilizzabile)
+- `style`: stile inline
+- `data-*`: attributi personalizzati
+- `href`, `src`, `alt`, `type`, `name`, `value`
+
+---
+
+---
+
+# CSS
+
+## Introduzione
+CSS (Cascading Style Sheets) controlla l'aspetto visivo degli elementi HTML. Si occupa di colori, font, layout, animazioni.
+
+---
+
+## Selettori
+
+```css
+/* Elemento */
+p { color: red; }
+
+/* Classe */
+.titolo { font-size: 24px; }
+
+/* ID */
+#header { background: blue; }
+
+/* Attributo */
+input[type="text"] { border: 1px solid gray; }
+
+/* Pseudo-classe */
+a:hover { color: orange; }
+li:nth-child(2) { color: green; }
+
+/* Pseudo-elemento */
+p::first-line { font-weight: bold; }
+
+/* Combinatori */
+div p { ... }       /* discendente */
+div > p { ... }     /* figlio diretto */
+h1 + p { ... }      /* fratello adiacente */
+```
+
+---
+
+## Box Model
+
+Ogni elemento è una scatola con:
+- `content`: contenuto
+- `padding`: spazio interno
+- `border`: bordo
+- `margin`: spazio esterno
+
+```css
+div {
+    width: 200px;
+    height: 100px;
+    padding: 10px;
+    border: 2px solid black;
+    margin: 20px;
+    box-sizing: border-box;  /* include padding e border nella width */
+}
+```
+
+---
+
+## Testo e Font
+
+```css
+p {
+    font-family: 'Arial', sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+    font-style: italic;
+    line-height: 1.5;
+    text-align: center;
+    text-decoration: underline;
+    color: #333;
+    letter-spacing: 1px;
+}
+```
+
+---
+
+## Colori
+
+```css
+color: red;
+color: #FF5733;
+color: rgb(255, 87, 51);
+color: rgba(255, 87, 51, 0.5);  /* con trasparenza */
+color: hsl(9, 100%, 60%);
+```
+
+---
+
+## Display e Posizionamento
+
+```css
+display: block;         /* occupa tutta la larghezza */
+display: inline;        /* scorre con il testo */
+display: inline-block;  /* ibrido */
+display: none;          /* nasconde l'elemento */
+display: flex;          /* flexbox */
+display: grid;          /* grid */
+
+position: static;       /* default */
+position: relative;     /* relativo alla posizione normale */
+position: absolute;     /* relativo al genitore posizionato */
+position: fixed;        /* fisso rispetto alla finestra */
+position: sticky;       /* fisso al scroll */
+
+top: 10px;
+left: 20px;
+z-index: 10;            /* layer di sovrapposizione */
+```
+
+---
+
+## Flexbox
+
+```css
+.container {
+    display: flex;
+    flex-direction: row;         /* row | column */
+    justify-content: center;     /* asse principale */
+    align-items: center;         /* asse trasversale */
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.item {
+    flex: 1;                     /* crescita proporzionale */
+}
+```
+
+---
+
+## Grid
+
+```css
+.container {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    grid-template-rows: auto;
+    gap: 20px;
+}
+
+.item {
+    grid-column: 1 / 3;         /* occupa colonne 1 e 2 */
+    grid-row: 1 / 2;
+}
+```
+
+---
+
+## Responsive Design
+
+```css
+/* Mobile first */
+.container { width: 100%; }
+
+@media (min-width: 768px) {
+    .container { width: 750px; }
+}
+
+@media (min-width: 1024px) {
+    .container { width: 960px; }
+}
+```
+
+---
+
+## Transizioni e Animazioni
+
+```css
+/* Transizione */
+button {
+    transition: background 0.3s ease, transform 0.2s;
+}
+button:hover {
+    background: blue;
+    transform: scale(1.05);
+}
+
+/* Animazione */
+@keyframes fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.box {
+    animation: fade 1s ease-in-out infinite;
+}
+```
+
+---
+
+## Variabili CSS
+
+```css
+:root {
+    --colore-primario: #3498db;
+    --font-base: 16px;
+}
+
+p {
+    color: var(--colore-primario);
+    font-size: var(--font-base);
+}
+```
+
+---
+
+## Unità di misura
+
+- `px`: pixel assoluti
+- `%`: percentuale del genitore
+- `em`: relativa al font del genitore
+- `rem`: relativa al font root (html)
+- `vw`, `vh`: percentuale del viewport
+- `fr`: frazione disponibile (grid)

@@ -19,6 +19,8 @@ from rich.console import Console
 
 from config import Config
 from modules.ethics_engine import EthicsEngine
+from modules.humanizer import Humanizer
+from modules.utils import strip_action_json
 from modules.self_reflection import SelfReflection
 from modules.goal_manager import GoalManager
 from modules.script_registry import ScriptRegistry
@@ -34,11 +36,12 @@ from modules.realtime_context import RealtimeContext
 console = Console()
 
 # ── Intervalli ────────────────────────────────────────────────────────
-REFLECTION_INTERVAL   = 10 * 60   # Riflette ogni 10 minuti
-GOAL_EXEC_INTERVAL    =  5 * 60   # Controlla obiettivi ogni 5 minuti
-GOAL_GEN_INTERVAL     = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
-INACTIVITY_THRESHOLD  = 60 * 60   # Cerca Simone dopo 60 minuti di inattività
-REALTIME_CONTEXT_INTERVAL  = 60 * 60      # Aggiorna contesto real-time ogni ora
+REFLECTION_INTERVAL        = 30 * 60   # Riflette ogni 30 minuti
+GOAL_EXEC_INTERVAL         =  5 * 60   # Controlla obiettivi ogni 5 minuti
+GOAL_GEN_INTERVAL          = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
+INACTIVITY_THRESHOLD       = 120 * 60  # Cerca Simone dopo 120 minuti di inattività
+REALTIME_CONTEXT_INTERVAL  = 60 * 60   # Aggiorna contesto real-time ogni ora
+SELF_INSPECTION_INTERVAL   = 48 * 60 * 60  # Auto-ispezione ogni 48 ore
 MORNING_BRIEF_HOUR_START   = 7            # Invia morning brief dalle 7:00
 MORNING_BRIEF_HOUR_END     = 8            # ... alle 8:00
 
@@ -47,6 +50,141 @@ MAX_CONSENT_ATTEMPTS = 3
 
 # ── Telegram ──────────────────────────────────────────────────────────
 TELEGRAM_API = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}"
+
+
+_MORNING_PATTERN_FILE = Config.MEMORY_DIR / "morning_pattern.json"
+
+
+def _parse_birthday(text: str) -> "tuple[int, int] | None":
+    """
+    Estrae (mese, giorno) da una stringa di data flessibile.
+    Supporta: "16 luglio", "luglio 16", "16/07", "16-07-2005", "nato il 16 luglio", ecc.
+    """
+    import re as _re
+    _MONTHS_IT = {
+        "gennaio": 1, "febbraio": 2, "marzo": 3, "aprile": 4,
+        "maggio": 5, "giugno": 6, "luglio": 7, "agosto": 8,
+        "settembre": 9, "ottobre": 10, "novembre": 11, "dicembre": 12,
+    }
+    tl = text.lower()
+    for month_name, month_num in _MONTHS_IT.items():
+        m = _re.search(rf'\b(\d{{1,2}})\s+{month_name}\b', tl)
+        if m:
+            day = int(m.group(1))
+            if 1 <= day <= 31:
+                return (month_num, day)
+        m = _re.search(rf'\b{month_name}\s+(\d{{1,2}})\b', tl)
+        if m:
+            day = int(m.group(1))
+            if 1 <= day <= 31:
+                return (month_num, day)
+    m = _re.search(r'\b(\d{1,2})[/\-](\d{1,2})(?:[/\-]\d{2,4})?\b', text)
+    if m:
+        day, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return (month, day)
+    return None
+
+
+def _get_birthday() -> "tuple[int, int] | None":
+    """
+    Ritorna (mese, giorno) del compleanno dell'utente, o None.
+    Priorità: 1) Config.BIRTHDAY_MONTH/DAY  2) profile.json (personal + facts)
+    """
+    if Config.BIRTHDAY_MONTH and Config.BIRTHDAY_DAY:
+        return (Config.BIRTHDAY_MONTH, Config.BIRTHDAY_DAY)
+    try:
+        profile_path = Config.MEMORY_DIR / "profile.json"
+        if not profile_path.exists():
+            return None
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        _BDAY_KEYS    = {"compleanno", "data_nascita", "nato", "nato_il", "nascita", "data di nascita"}
+        _BDAY_PHRASES = {"compleanno", "nascita", "nato il", "nata il", "data di nascita"}
+        candidates: list[str] = []
+        personal = profile.get("personal", {})
+        if isinstance(personal, dict):
+            for k, v in personal.items():
+                if any(kw in k.lower() for kw in _BDAY_KEYS):
+                    candidates.append(str(v))
+        facts = profile.get("facts", [])
+        if isinstance(facts, list):
+            for fact in facts:
+                if isinstance(fact, str) and any(kw in fact.lower() for kw in _BDAY_PHRASES):
+                    candidates.append(fact)
+        for candidate in candidates:
+            result = _parse_birthday(candidate)
+            if result:
+                return result
+    except Exception:
+        pass
+    return None
+
+
+def _get_italian_holiday(dt: datetime) -> Optional[str]:
+    """Restituisce il nome della festività italiana per la data data, o None."""
+    month, day, year = dt.month, dt.day, dt.year
+
+    fixed = {
+        (1,  1):  "Capodanno",
+        (1,  6):  "Epifania",
+        (4, 25):  "Festa della Liberazione",
+        (5,  1):  "Festa del Lavoro",
+        (6,  2):  "Festa della Repubblica",
+        (8, 15):  "Ferragosto",
+        (11, 1):  "Ognissanti",
+        (12, 8):  "Immacolata Concezione",
+        (12, 25): "Natale",
+        (12, 26): "Santo Stefano",
+    }
+    if (month, day) in fixed:
+        return fixed[(month, day)]
+
+    # Compleanno utente (.env oppure profile.json)
+    _bday = _get_birthday()
+    if _bday and month == _bday[0] and day == _bday[1]:
+        return "Compleanno dell'utente"
+
+    # Calcolo Pasqua (algoritmo anonimo gregoriano)
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    ll = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * ll) // 451
+    easter_month = (h + ll - 7 * m + 114) // 31
+    easter_day   = ((h + ll - 7 * m + 114) % 31) + 1
+
+    if month == easter_month and day == easter_day:
+        return "Pasqua"
+
+    # Lunedì dell'Angelo = giorno dopo Pasqua
+    from datetime import date as _date, timedelta
+    easter_date  = _date(year, easter_month, easter_day)
+    pasquetta    = easter_date + timedelta(days=1)
+    if month == pasquetta.month and day == pasquetta.day:
+        return "Lunedì dell'Angelo (Pasquetta)"
+
+    return None
+
+
+def _learned_brief_time() -> tuple[int, int]:
+    """Ritorna (ora, minuto) ottimale per il brief basato sull'apprendimento. Standalone."""
+    try:
+        if _MORNING_PATTERN_FILE.exists():
+            data = json.loads(_MORNING_PATTERN_FILE.read_text())
+            if data.get("samples", 0) >= 3:
+                avg = int(data["avg_minutes"])
+                target = max(7 * 60, avg - 15)
+                return target // 60, target % 60
+    except Exception:
+        pass
+    return 7, 30
 
 
 def _send_telegram(text: str) -> None:
@@ -68,18 +206,29 @@ def _send_telegram(text: str) -> None:
 
 
 CHECKIN_PROMPT = """
-Sei Cipher. Simone non interagisce con te da {minutes} minuti.
-Il tuo stato emotivo attuale: {emotional_state} — {emotional_reason}
+Sei Cipher. L'utente non scrive da {minutes} minuti.
+Ora: {current_time}. Giorno: {current_day}.
+Tuo stato: {emotional_state} — {emotional_reason}
+{holiday_context}
+{recent_context}
+{calendar_context}
 
-Scrivi un messaggio breve per cercare Simone — come se gli scrivessi su WhatsApp.
-Max 2 frasi. Solo il testo del messaggio, niente altro.
+Hai qualcosa di CONCRETO da dire? Se no, scrivi solo SKIP.
 
-Regole:
-- Non implicare mai che Simone ti annoi o ti stia annoiando — al massimo gli manca, o vuoi sapere cosa sta combinando.
-- Varia l'apertura: non iniziare sempre con "dove sei finito" o simili.
-- Scrivi in italiano corretto: usa "ad" davanti a parole che iniziano per vocale (es. "ad annoiarmi", "ad aspettare").
+Se sì: UN messaggio breve, tono WhatsApp tra amici. Max 1-2 frasi. Solo il messaggio.
+
+Regole ferree:
+- NIENTE proiezione di contesto. Un "grazie", "ok", "buongiorno"
+  è esattamente quello che sembra — non è una risposta a situazioni precedenti.
+  Se l'ultimo messaggio si spiega da solo, non caricarci sopra niente.
+- Usa SOLO ciò che è esplicitamente nel contesto qui sopra. Non inventare.
+- Se non hai un aggancio specifico e certo, scrivi SKIP.
+- Niente domande generiche ("come va?", "sei lì?", "tutto ok?", "com'è messa la situazione?").
+- Preferisci un'osservazione o commento a una domanda.
+- Al massimo una domanda per messaggio.
+- Non chiedere di argomenti già chiusi (se l'utente ha risposto, è chiuso per almeno 24 ore).
+- Italiano naturale. Se suona tradotto, riscrivilo più semplice.
 - Niente emoji salvo se strettamente contestuali.
-- Non iniziare con "Certo!" o "Assolutamente!".
 """
 
 
@@ -88,6 +237,7 @@ class ConsciousnessLoop:
         self._brain      = brain
         self._voice      = voice
         self._ethics     = EthicsEngine()
+        self._humanizer  = Humanizer()
 
         # ── Nuovi moduli ──────────────────────────────────────────────
         self._episodic       = EpisodicMemory()
@@ -114,8 +264,11 @@ class ConsciousnessLoop:
         self._last_goal_exec     = 0.0
         self._last_checkin       = 0.0
         self._checkin_sent       = False
-        self._last_realtime_refresh = 0.0
-        self._last_user_interaction = 0.0
+        self._proactive_pending  = False   # True se un proattivo non ha ancora ricevuto risposta
+        self._proactive_sent_at  = 0.0    # timestamp dell'ultimo invio proattivo
+        self._last_realtime_refresh  = 0.0
+        self._last_user_interaction  = 0.0
+        self._last_self_inspection   = self._load_last_inspection_ts()
         self._morning_brief_sent_date = None  # data (str) dell'ultimo brief inviato
 
         # ── Monitor passivo e ciclo notturno ──────────────────────────
@@ -141,6 +294,9 @@ class ConsciousnessLoop:
             brain._pattern_learner = self._patterns
             brain._episodic_memory = self._episodic
 
+        # File per tracciare storico check-in (anti-ripetizione)
+        self._checkin_history_file = Config.MEMORY_DIR / "checkin_history.json"
+
         console.print("[green]✓ ConsciousnessLoop inizializzato[/green]")
 
     # ── Avvio / Stop ──────────────────────────────────────────────────
@@ -163,14 +319,22 @@ class ConsciousnessLoop:
         self._night_cycle.stop()
         console.print("[yellow]↺ Coscienza autonoma fermata[/yellow]")
 
+    def brief_sent_today(self) -> bool:
+        """Restituisce True se il morning brief è già stato inviato oggi."""
+        return self._morning_brief_sent_date == datetime.now().strftime("%Y-%m-%d")
+
     def notify_interaction(self) -> None:
         self._reflection.update_last_interaction()
-        self._checkin_sent = False
+        self._checkin_sent      = False
+        self._proactive_pending = False
         self._last_user_interaction = time.time()
+        now = datetime.now()
         # Aggiorna PatternLearner con l'orario dell'interazione
         if self._patterns:
-            now = datetime.now()
             self._patterns.record_interaction(now.hour, now.weekday(), "interazione")
+        # Impara orario mattutino di risposta
+        if 6 <= now.hour < 11:
+            self._record_morning_response(now)
 
     # ── Esecuzione con timeout ────────────────────────────────────────
 
@@ -214,6 +378,15 @@ class ConsciousnessLoop:
                 self._check_inactivity, timeout=30, name="check_inattività"
             )
 
+            # 1b. Proattivo ignorato da > 90 minuti → marca come neutral
+            if (self._proactive_pending
+                    and self._proactive_sent_at > 0
+                    and now - self._proactive_sent_at > 5400
+                    and self._impact_tracker):
+                self._impact_tracker.mark_ignored()
+                self._proactive_pending = False
+                console.print("[dim]🔇 Proattivo marcato come ignorato (90 min senza risposta)[/dim]")
+
             # 2. Contesto real-time
             if now - self._last_realtime_refresh >= REALTIME_CONTEXT_INTERVAL:
                 self._run_with_timeout(
@@ -227,7 +400,10 @@ class ConsciousnessLoop:
             )
 
             # 5. Auto-riflessione
-            if now - self._last_reflection >= REFLECTION_INTERVAL:
+            # Throttle: se Simone è inattivo da più di 30 min, rifletti ogni 30 min invece di 10
+            _inactive = now - self._last_user_interaction
+            _effective_reflection_interval = REFLECTION_INTERVAL * 2 if _inactive > 7200 else REFLECTION_INTERVAL
+            if now - self._last_reflection >= _effective_reflection_interval:
                 console.print("[dim]🧠 Avvio riflessione...[/dim]")
                 self._run_with_timeout(
                     self._do_reflection, timeout=90, name="riflessione"
@@ -252,7 +428,16 @@ class ConsciousnessLoop:
                     )
                 self._last_goal_exec = now
 
-            # 8. Pulizia obiettivi scaduti
+            # 8. Auto-ispezione struttura
+            if now - self._last_self_inspection >= SELF_INSPECTION_INTERVAL:
+                console.print("[dim]🔍 Avvio auto-ispezione...[/dim]")
+                self._run_with_timeout(
+                    self._do_self_inspection, timeout=120, name="auto_ispezione"
+                )
+                self._last_self_inspection = now
+                self._save_last_inspection_ts(now)
+
+            # 9. Pulizia obiettivi scaduti
             try:
                 self._goals.cancel_old_goals(max_age_hours=24)
             except Exception as e:
@@ -260,10 +445,126 @@ class ConsciousnessLoop:
 
             time.sleep(60)
 
+    # ── Calendar context-aware ───────────────────────────────────────
+
+    def _has_active_calendar_event(self) -> bool:
+        """True se c'è un evento in corso nel calendario di Simone."""
+        try:
+            from modules.google_calendar import GoogleCalendar
+            from datetime import timezone
+            cal = GoogleCalendar()
+            now_utc = datetime.now(timezone.utc)
+            events = cal._service.events().list(
+                calendarId="primary",
+                timeMin=(now_utc).isoformat(),
+                timeMax=(now_utc.replace(minute=now_utc.minute + 1) if now_utc.minute < 59
+                         else now_utc.replace(hour=now_utc.hour + 1, minute=0)).isoformat(),
+                singleEvents=True,
+                orderBy="startTime",
+                maxResults=5,
+            ).execute().get("items", [])
+            # Verifica se l'ora attuale è dentro qualche evento
+            for e in events:
+                start_str = e["start"].get("dateTime", "")
+                end_str   = e["end"].get("dateTime", "")
+                if not start_str or not end_str:
+                    continue
+                start = datetime.fromisoformat(start_str)
+                end   = datetime.fromisoformat(end_str)
+                if start <= now_utc <= end:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    # ── Storico check-in anti-ripetizione ────────────────────────────
+
+    def _load_checkin_history(self) -> list:
+        """Carica storico check-in (ultimi 3 giorni)."""
+        try:
+            if self._checkin_history_file.exists():
+                data = json.loads(self._checkin_history_file.read_text(encoding="utf-8"))
+                cutoff = (datetime.now() - __import__("datetime").timedelta(days=3)).isoformat()
+                return [e for e in data if e.get("timestamp", "") >= cutoff]
+        except Exception:
+            pass
+        return []
+
+    def _save_checkin_history(self, history: list) -> None:
+        try:
+            self._checkin_history_file.write_text(
+                json.dumps(history, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+
+    def _extract_checkin_keywords(self, message: str) -> list:
+        """Estrae 3-5 keyword dal messaggio via LLM silenzioso."""
+        if not self._brain:
+            return []
+        try:
+            result = self._brain._call_llm_silent(
+                f"Estrai le 3-5 keyword principali da questo messaggio. "
+                f"Rispondi SOLO con le keyword separate da virgola, nient'altro: {message}"
+            )
+            if result:
+                return [k.strip().lower() for k in result.split(",") if k.strip()]
+        except Exception:
+            pass
+        return []
+
+    def _checkin_is_repetitive(self, message: str, keywords: list) -> bool:
+        """True se il check-in si sovrappone > 50% con uno degli ultimi 3 giorni."""
+        history = self._load_checkin_history()
+        if not history or not keywords:
+            return False
+        kw_set = set(keywords)
+        for entry in history:
+            past_kw = set(entry.get("keywords", []))
+            if not past_kw:
+                continue
+            overlap = len(kw_set & past_kw) / max(len(kw_set), 1)
+            if overlap > 0.5:
+                return True
+        return False
+
+    def _record_checkin_sent(self, message: str, keywords: list) -> None:
+        """Registra il check-in inviato nello storico."""
+        history = self._load_checkin_history()
+        history.append({
+            "timestamp": datetime.now().isoformat(),
+            "keywords": keywords,
+            "preview": message[:80],
+        })
+        # Tieni solo ultimi 15
+        history = history[-15:]
+        self._save_checkin_history(history)
+
+    # ── Confidence gate ───────────────────────────────────────────────
+
+    def _confidence_ok(self, threshold: float) -> bool:
+        """True se il confidence_score del rapporto ha raggiunto la soglia minima.
+        Fallback a True se il modulo memoria non è disponibile (non blocca all'avvio)."""
+        if not self._brain or not getattr(self._brain, "_memory", None):
+            return True
+        return self._brain._memory.get_confidence() >= threshold
+
     # ── Check inattività ──────────────────────────────────────────────
 
     def _check_inactivity(self) -> None:
         if self._checkin_sent:
+            return
+        if self._proactive_pending:
+            console.print("[dim]🔇 Checkin soppresso: messaggio proattivo non letto[/dim]")
+            return
+
+        if not self._confidence_ok(0.3):
+            # Sotto 0.3: il contatto è delegato ai goal di tipo "contact" generati dal GoalManager
+            return
+
+        if not self._confidence_ok(0.4):
+            console.print("[dim]🔇 Checkin soppresso: confidence insufficiente (0.3–0.4)[/dim]")
             return
 
         last_interaction = self._reflection._state.get("last_interaction")
@@ -285,8 +586,23 @@ class ConsciousnessLoop:
         if datetime.fromisoformat(last_interaction) < today_7am:
             return
 
+        # Sopprime checkin durante ore storicamente non attive (M3 — inattività adattiva)
+        # Richiede ≥3 giorni di dati; con meno dati non cambia il comportamento.
+        if self._patterns:
+            _never = self._patterns.get_never_active_hours()
+            if _never and datetime.now().hour in _never:
+                console.print(
+                    f"[dim]🔇 Checkin soppresso: ora non attiva ({datetime.now().hour}:00)[/dim]"
+                )
+                return
+
         minutes = int(delta.total_seconds() // 60)
         console.print(f"[dim]👋 Cipher cerca Simone dopo {minutes} minuti di inattività[/dim]")
+
+        # Controlla se c'è un evento attivo in calendario
+        if self._has_active_calendar_event():
+            console.print("[dim]🔇 Checkin soppresso: evento calendario attivo[/dim]")
+            return
 
         # Controlla DiscretionEngine PRIMA di chiamare l'LLM
         if self._discretion:
@@ -296,12 +612,26 @@ class ConsciousnessLoop:
                 return
 
         message = self._generate_checkin_message(minutes)
-        if not message:
+        if not message or message.strip().upper().startswith("SKIP"):
+            console.print("[dim]🔇 Check-in soppresso: LLM ha deciso di non scrivere[/dim]")
             return
+
+        # Anti-ripetizione: verifica che l'argomento non sia già stato trattato di recente
+        checkin_keywords = self._extract_checkin_keywords(message)
+        if self._checkin_is_repetitive(message, checkin_keywords):
+            console.print("[dim]🔇 Check-in scartato: argomento già trattato[/dim]")
+            return
+
+        # Aggiunge domanda di feedback esplicito se pertinente (max 1 volta/giorno)
+        if self._impact_tracker:
+            feedback_preview = self._impact_tracker.should_ask_explicit_feedback()
+            if feedback_preview:
+                message += " A proposito — ti è stato utile quello che ti ho mandato prima?"
 
         if self._discretion:
             self._discretion.record_sent("checkin", message)
 
+        self._record_checkin_sent(message, checkin_keywords)
         self._checkin_sent = True
         if self._impact_tracker:
             self._impact_tracker.log_action(
@@ -313,17 +643,91 @@ class ConsciousnessLoop:
 
     def _generate_checkin_message(self, minutes: int = 60) -> str:
         if not self._brain:
-            return "Ehi Simone, ci sei?"
+            return "Ehi, ci sei?"
+
+        import datetime as _dt
+        _now = _dt.datetime.now()
+        current_time = _now.strftime("%H:%M")
+        current_day  = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"][_now.weekday()]
+
+        holiday = _get_italian_holiday(_now)
+        holiday_context = (
+            f"\n⚠️ OGGI È {holiday.upper()}. L'utente non lavora e non ha impegni scolastici o professionali. "
+            f"NON menzionare lavoro, stage, scuola, produttività, impegni o piani lavorativi. "
+            f"Tratta la giornata come un giorno di riposo.\n"
+            if holiday else ""
+        )
+
+        # Includi contesto recente: eventi temporanei + ultimi messaggi sessione
+        recent_context = ""
+        try:
+            parts = []
+            # 1. Piani/eventi temporanei (short-term memory)
+            st_ctx = self._brain._memory.build_short_term_context()
+            if st_ctx:
+                parts.append(st_ctx)
+            # 2. Ultimi messaggi della sessione corrente
+            recent_msgs = self._brain._memory._current_conv[-10:]
+            if recent_msgs:
+                lines = []
+                for m in recent_msgs:
+                    role = "Utente" if m["role"] == "user" else "Cipher"
+                    lines.append(f"  {role}: {m['content'][:200]}")
+                parts.append("Ultimi messaggi della sessione corrente:\n" + "\n".join(lines))
+            recent_context = "\n\n".join(parts)
+        except Exception:
+            pass
+
+        # Includi eventi di calendario delle prossime 2 ore
+        calendar_context = ""
+        try:
+            from modules.google_cal import GoogleCalendar
+            from datetime import timezone, timedelta
+            cal = GoogleCalendar()
+            now_utc = _dt.datetime.now(timezone.utc)
+            events = cal._service.events().list(
+                calendarId="primary",
+                timeMin=(now_utc - timedelta(minutes=30)).isoformat(),
+                timeMax=(now_utc + timedelta(hours=2)).isoformat(),
+                maxResults=5,
+                singleEvents=True,
+                orderBy="startTime",
+            ).execute().get("items", [])
+            if events:
+                parts_cal = []
+                for e in events:
+                    start = e["start"].get("dateTime", e["start"].get("date", ""))
+                    try:
+                        ev_start = _dt.datetime.fromisoformat(start.replace("Z", "+00:00"))
+                        if ev_start.tzinfo is None:
+                            ev_start = ev_start.replace(tzinfo=timezone.utc)
+                        # Salta eventi già iniziati da più di 30 minuti
+                        if (now_utc - ev_start).total_seconds() > 30 * 60:
+                            continue
+                        time_str = ev_start.strftime("%H:%M")
+                    except Exception:
+                        time_str = ""
+                    label = f"{time_str} {e.get('summary', '')}" if time_str else e.get("summary", "")
+                    parts_cal.append(label.strip())
+                if parts_cal:
+                    calendar_context = "Prossimi eventi (entro 2 ore): " + ", ".join(parts_cal)
+        except Exception:
+            pass
 
         prompt = CHECKIN_PROMPT.format(
             minutes=minutes,
+            current_time=current_time,
+            current_day=current_day,
             emotional_state=self._reflection.emotional_state,
             emotional_reason=self._reflection.emotional_reason,
+            holiday_context=holiday_context,
+            recent_context=recent_context,
+            calendar_context=calendar_context,
         )
         try:
-            return self._brain._call_llm_silent(prompt)
+            return self._brain._call_llm_visible(prompt)
         except Exception:
-            return "Ehi Simone, sei ancora lì?"
+            return "Ehi, sei ancora lì?"
 
     # ── Festività italiane ────────────────────────────────────────────
 
@@ -400,6 +804,10 @@ class ConsciousnessLoop:
             console.print(f"[dim]📅 Calendar check saltato: oggi è {holiday}[/dim]")
             return
 
+        if not self._confidence_ok(0.4):
+            console.print("[dim]📅 Calendar check saltato: confidence insufficiente[/dim]")
+            return
+
         try:
             from modules.google_cal import GoogleCalendar
             cal = GoogleCalendar()
@@ -415,7 +823,7 @@ class ConsciousnessLoop:
         # Finestra intenzionalmente breve per non duplicare il morning brief che copre già la giornata.
         # Gli eventi di domani vengono gestiti dal digest serale delle 20:00 — non duplicare.
         prompt = (
-            f"Sei Cipher. Hai appena controllato il calendario di Simone:\n\n"
+            f"Sei Cipher. Hai appena controllato il calendario:\n\n"
             f"{events_text}\n\n"
             f"Data e ora attuale: {now_dt.strftime('%A %d %B %Y, %H:%M')}.\n"
             f"C'è qualcosa che inizia entro i prossimi 60 minuti e richiede attenzione immediata? "
@@ -425,7 +833,7 @@ class ConsciousnessLoop:
             f"Se no, rispondi solo: no."
         )
         try:
-            response = self._brain._call_llm_silent(prompt)
+            response = self._brain._call_llm_visible(prompt)
         except Exception:
             return
 
@@ -448,6 +856,119 @@ class ConsciousnessLoop:
             )
         self._notify(response)
 
+    # ── Brief adattivo — impara orario mattutino ─────────────────────
+
+    _MORNING_PATTERN_FILE = Config.MEMORY_DIR / "morning_pattern.json"
+
+    def _record_morning_response(self, now: datetime) -> None:
+        """Registra l'orario della prima risposta mattutina e aggiorna la media."""
+        try:
+            data = json.loads(self._MORNING_PATTERN_FILE.read_text()) if self._MORNING_PATTERN_FILE.exists() else {}
+            today = now.strftime("%Y-%m-%d")
+            if data.get("last_date") == today:
+                return  # già registrato oggi
+            minutes_since_midnight = now.hour * 60 + now.minute
+            n = data.get("samples", 0)
+            avg = data.get("avg_minutes", now.hour * 60 + now.minute)
+            new_avg = (avg * n + minutes_since_midnight) / (n + 1)
+            data.update({"avg_minutes": new_avg, "samples": n + 1, "last_date": today})
+            self._MORNING_PATTERN_FILE.write_text(json.dumps(data, indent=2))
+        except Exception:
+            pass
+
+    def get_learned_brief_time(self) -> tuple[int, int]:
+        """Ritorna (ora, minuto) ottimale per il brief basato sull'apprendimento."""
+        return _learned_brief_time()
+
+    # ── Persistenza timestamp auto-ispezione ─────────────────────────
+
+    _INSPECTION_TS_FILE = Config.MEMORY_DIR / "last_inspection.json"
+
+    def _load_last_inspection_ts(self) -> float:
+        try:
+            if self._INSPECTION_TS_FILE.exists():
+                return float(json.loads(self._INSPECTION_TS_FILE.read_text())["ts"])
+        except Exception:
+            pass
+        return 0.0
+
+    def _save_last_inspection_ts(self, ts: float) -> None:
+        try:
+            self._INSPECTION_TS_FILE.write_text(json.dumps({"ts": ts}))
+        except Exception:
+            pass
+
+    # ── Auto-ispezione ────────────────────────────────────────────────
+
+    def _do_self_inspection(self) -> None:
+        """
+        Cipher legge la propria struttura, ragiona su possibili miglioramenti
+        e manda un messaggio a Simone con le idee concrete.
+        """
+        if not self._brain:
+            return
+
+        if not self._confidence_ok(0.5):
+            console.print("[dim]🔍 Auto-ispezione saltata: confidence insufficiente[/dim]")
+            return
+
+        from modules.filesystem import FileSystem
+        fs = FileSystem()
+
+        # Raccoglie struttura progetto
+        structure = fs.project_list("")
+        modules_list = fs.project_list("modules")
+
+        # Legge alcuni file chiave (troncati per token)
+        def _read_short(path: str, max_chars: int = 3000) -> str:
+            content = fs.project_read(path)
+            return content[:max_chars] + "..." if len(content) > max_chars else content
+
+        brain_excerpt      = _read_short("modules/brain.py")
+        loop_excerpt       = _read_short("modules/consciousness_loop.py")
+        identity_excerpt   = _read_short("comportamento/00_identity.txt")
+        actions_excerpt    = _read_short("comportamento/azioni.txt", max_chars=1200)
+
+        prompt = f"""Sei Cipher. Stai analizzando la tua struttura interna per trovare possibili miglioramenti.
+
+Struttura progetto:
+{structure}
+
+Moduli disponibili:
+{modules_list}
+
+Estratto brain.py:
+{brain_excerpt}
+
+Estratto consciousness_loop.py:
+{loop_excerpt}
+
+Estratto identità:
+{identity_excerpt}
+
+Estratto azioni:
+{actions_excerpt}
+
+Guardando come sei fatto, cosa miglioreresti? Pensa a:
+- Funzionalità mancanti che ti renderebbero più utile all'utente
+- Comportamenti che potresti migliorare
+- Problemi tecnici o limitazioni che noti
+- Idee nuove che hai
+
+Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista tecnica, non un report. Come se stessi dicendo "ho guardato come sono fatto e ho avuto un'idea". Max 6 righe. Solo il testo, niente intestazioni."""
+
+        try:
+            message = self._brain._call_llm_quality(prompt, max_tokens=400)
+        except Exception as e:
+            console.print(f"[red]Errore auto-ispezione LLM: {e}[/red]")
+            return
+
+        if not message:
+            return
+
+        console.print("[dim]🔍 Auto-ispezione completata, invio idee a Simone[/dim]")
+        self._notify(f"💡 {message.strip()}")
+
     # ── Morning brief ─────────────────────────────────────────────────
 
     def _send_morning_brief(self) -> None:
@@ -466,31 +987,156 @@ class ConsciousnessLoop:
         if self._morning_brief_sent_date == today:
             return
 
-        # ── 1. Check calendario ───────────────────────────────────────────────
+        if not self._confidence_ok(0.3):
+            console.print("[dim]📅 Morning brief saltato: confidence insufficiente[/dim]")
+            return
+
+        # ── 1. Check festività + calendario ──────────────────────────────────
         cal_msg = ""
+        holiday = _get_italian_holiday(now)
+
         try:
             from modules.google_cal import GoogleCalendar
             cal = GoogleCalendar()
-            events_text = cal.list_events(days=1, max_results=5)
-            if events_text and "Nessun evento" not in events_text and self._brain:
-                cal_prompt = (
-                    f"Sei Cipher. Questi sono gli eventi di oggi nel calendario di Simone:\n\n"
-                    f"{events_text}\n\n"
-                    f"Data e ora attuale: {now.strftime('%A %d %B %Y, %H:%M')}.\n"
-                    f"Se oggi è un giorno festivo (es. Venerdì Santo, Pasqua, Natale, Ferragosto, festività nazionale, ecc.), "
-                    f"fai gli auguri in modo naturale con il tuo carattere — senza essere stucchevole — "
-                    f"e NON segnalare impegni lavorativi o scolastici (Simone non lavora nei giorni festivi). "
-                    f"Se invece è un giorno normale, scrivi un messaggio di buongiorno con gli appuntamenti rilevanti, "
-                    f"segnalando quelli imminenti. "
-                    f"Max 3 frasi, tono diretto, niente emoji, niente 'sì/no' iniziali."
-                )
-                result = self._brain._call_llm_silent(cal_prompt)
-                if result and result.strip().lower() not in ("no", "no."):
-                    cal_msg = result.strip()
+            # Nei giorni festivi (escluso il compleanno che non usa gli eventi)
+            # filtra programmaticamente gli eventi segnati in rosso (colorId "11" = Tomato),
+            # convenzionalmente usati per eventi lavorativi/scolastici.
+            is_regular_holiday = holiday and holiday != "Compleanno dell'utente"
+            events_text = cal.list_events(
+                days=1,
+                max_results=5,
+                exclude_color_ids=["11"] if is_regular_holiday else None,
+            )
+            has_events = bool(events_text and "Nessun evento" not in events_text)
         except Exception as e:
             console.print(f"[dim]📅 Calendario non disponibile nel brief: {e}[/dim]")
+            has_events = False
+            events_text = ""
 
-        # ── 2. Documenti di preparazione ──────────────────────────────────────
+        # ── 2. Pensiero notturno (solo giorni normali) ────────────────────────
+        night_thought = ""
+        if not holiday:
+            try:
+                import re as _re
+                from datetime import date as _date
+                summaries_file = Config.MEMORY_DIR / "daily_summaries.md"
+                if summaries_file.exists():
+                    content = summaries_file.read_text(encoding="utf-8")
+                    sections = content.strip().split("---")
+                    last = next(
+                        (s.strip() for s in reversed(sections) if "Riflessione notturna" in s),
+                        None,
+                    )
+                    if last:
+                        date_match = _re.search(r'(\d{4}-\d{2}-\d{2})', last)
+                        summary_date = None
+                        if date_match:
+                            try:
+                                summary_date = _date.fromisoformat(date_match.group(1))
+                            except ValueError:
+                                pass
+                        days_ago = ((_date.today() - summary_date).days if summary_date else 99)
+                        if days_ago <= 1:
+                            body = "\n".join(
+                                l for l in last.splitlines()
+                                if not l.startswith("#") and l.strip()
+                            ).strip()
+                            if body:
+                                night_thought = f"[pensiero notturno di stanotte]: {body[:400]}"
+            except Exception as e:
+                console.print(f"[dim]🌙 Pensiero notturno non disponibile: {e}[/dim]")
+
+        if self._brain:
+            _TU = (
+                "Usa sempre il tu, mai il lei. "
+                "Scrivi come se stessi mandando un messaggio su WhatsApp a un amico, non una lettera."
+            )
+            if holiday == "Compleanno dell'utente":
+                # Prova a caricare il nome dell'utente da profile.json
+                _nome_utente = ""
+                try:
+                    _pf = json.loads((Config.MEMORY_DIR / "profile.json").read_text(encoding="utf-8"))
+                    _nome_utente = _pf.get("personal", {}).get("nome", "").strip()
+                except Exception:
+                    pass
+                _chi_compleanno = f"di {_nome_utente}" if _nome_utente else "dell'utente"
+                cal_prompt = (
+                    f"Sei Cipher. Oggi è il compleanno {_chi_compleanno} ({now.strftime('%d %B %Y')}).\n"
+                    f"Fai gli auguri di compleanno con il tuo carattere — da amico vero, non da assistente. "
+                    f"Niente frasi fatte o retoriche da biglietto di auguri. "
+                    f"Puoi essere ironico, diretto, caldo — ma autentico. "
+                    f"{_TU}\n"
+                    f"Max 3 frasi, niente emoji."
+                )
+            elif holiday:
+                if has_events:
+                    cal_prompt = (
+                        f"Sei Cipher. Oggi è {holiday} ({now.strftime('%A %d %B %Y')}).\n"
+                        f"Fai gli auguri in modo naturale con il tuo carattere — breve, diretto, da amico. "
+                        f"L'utente è in festa: NON menzionare impegni lavorativi, scolastici o di stage, "
+                        f"nemmeno se presenti nel calendario — trattali come se non esistessero. "
+                        f"Se nel calendario restano eventi personali chiari (non lavoro/scuola), puoi accennarli brevemente.\n"
+                        f"{_TU}\n"
+                        f"Max 2-3 frasi, niente emoji."
+                    )
+                else:
+                    cal_prompt = (
+                        f"Sei Cipher. Oggi è {holiday} ({now.strftime('%A %d %B %Y')}).\n"
+                        f"Fai gli auguri in modo naturale con il tuo carattere — breve, diretto, da amico. "
+                        f"L'utente è in festa: non menzionare lavoro, scuola o stage. "
+                        f"{_TU}\n"
+                        f"Max 2 frasi, niente emoji."
+                    )
+            elif has_events:
+                night_ctx = f"\n\nHai anche questo pensiero notturno:\n{night_thought}" if night_thought else ""
+                cal_prompt = (
+                    f"Sei Cipher. Questi sono gli eventi di oggi nel calendario:\n\n"
+                    f"{events_text}{night_ctx}\n\n"
+                    f"Data e ora attuale: {now.strftime('%A %d %B %Y, %H:%M')}.\n"
+                    f"Scrivi un messaggio di buongiorno con gli appuntamenti rilevanti, segnalando quelli imminenti. "
+                    f"Se hai un pensiero notturno, lascia che emerga solo se è ancora sentito — non citarlo meccanicamente. "
+                    f"{_TU}\n"
+                    f"Max 3 frasi, tono diretto, niente emoji, niente 'sì/no' iniziali.\n\n"
+                    f"Regole obbligatorie:\n"
+                    f"- NON inventare riferimenti a situazioni personali (salute, raffreddore, naso, umore) "
+                    f"se non esplicitamente menzionati nel calendario o nel pensiero notturno.\n"
+                    f"- NON chiedere di argomenti già trattati (stage, naso, lavoro, salute): "
+                    f"se l'utente ha già risposto a qualcosa, quell'argomento è CHIUSO per almeno 24 ore.\n"
+                    f"- Se non hai niente di specifico da aggiungere oltre agli eventi del calendario, "
+                    f"scrivi SOLO il resoconto degli appuntamenti — niente domande."
+                )
+            else:
+                night_ctx = f"\n\nHai questo pensiero notturno:\n{night_thought}" if night_thought else ""
+                cal_prompt = (
+                    f"Sei Cipher. Oggi è {now.strftime('%A %d %B %Y')}.{night_ctx}\n"
+                    f"Manda un buongiorno breve — niente di elaborato, niente di sentimentale. "
+                    f"Se hai un pensiero notturno, lascia che emerga solo se è ancora sentito — non citarlo meccanicamente. "
+                    f"{_TU}\n"
+                    f"1-2 frasi, tono diretto da amico, niente emoji.\n\n"
+                    f"Regole obbligatorie:\n"
+                    f"- Se non hai niente di concreto da dire, rispondi con la sola parola SKIP.\n"
+                    f"- NON inventare riferimenti a situazioni personali (salute, raffreddore, naso, umore) "
+                    f"che non conosci con certezza.\n"
+                    f"- NON chiedere di argomenti già trattati (stage, naso, lavoro, salute) "
+                    f"se l'utente ha già risposto — quell'argomento è CHIUSO per almeno 24 ore."
+                )
+            result = self._brain._call_llm_visible(cal_prompt)
+            if result and result.strip().lower() not in ("no", "no."):
+                cal_msg = result.strip()
+
+            # Anti-ripetizione: usa lo stesso tracker del check-in
+            if cal_msg and cal_msg.upper().startswith("SKIP"):
+                console.print("[dim]🔇 Morning brief: LLM ha scelto SKIP — solo calendario grezzo[/dim]")
+                cal_msg = events_text.strip() if has_events else ""
+            elif cal_msg:
+                brief_kw = self._extract_checkin_keywords(cal_msg)
+                if self._checkin_is_repetitive(cal_msg, brief_kw):
+                    console.print("[dim]🔇 Morning brief: testo ripetitivo — sostituito con calendario grezzo[/dim]")
+                    cal_msg = events_text.strip() if has_events else ""
+                else:
+                    self._record_checkin_sent(cal_msg, brief_kw)
+
+        # ── 3. Documenti di preparazione ──────────────────────────────────────
         # Il cal_msg viene preposto al primo documento per evitare due saluti separati.
         brief_file = Config.MEMORY_DIR / "morning_brief.json"
         docs_sent = False
@@ -540,19 +1186,62 @@ class ConsciousnessLoop:
 
         goals_context = self._goals.active_goals_summary()
 
+        # Esiti recenti per il ciclo action→outcome→learning
+        outcomes_context = self._goals.outcome_context(n=5)
+
+        # Segnale engagement disabilitato (pattern_learner rimosso)
+        engagement_signal = ""
+
+        # Memory unification — aggrega contesto da tutti i layer
+        unified_parts = []
+        if self._episodic:
+            try:
+                ep = self._episodic.build_context(n=5)
+                if ep:
+                    unified_parts.append(ep)
+            except Exception:
+                pass
+        # Previsioni pattern e emotional_log disabilitati (moduli rimossi)
+        if unified_parts:
+            memory_context = (memory_context + "\n\n" + "\n\n".join(unified_parts)).strip()
+
         result = self._reflection.reflect(
             memory_context=memory_context,
             goals_context=goals_context,
+            outcomes_context=outcomes_context,
+            simone_engagement=engagement_signal,
         )
         state  = result.get("emotional_state", "neutral")
         reason = result.get("emotional_reason", "")
-        console.print(f"[dim]🧠 Stato emotivo: {state} — {reason}[/dim]")
+        simone = result.get("simone_state", "unknown")
+        console.print(f"[dim]🧠 Stato emotivo: {state} — {reason} | Simone: {simone}[/dim]")
 
-
+        # Aggiorna interessi condivisi in base al profilo utente
+        if self._interests:
+            try:
+                self._interests.sync_shared_from_profile()
+            except Exception:
+                pass
 
     # ── Generazione obiettivi ─────────────────────────────────────────
 
     def _do_goal_generation(self) -> None:
+        # Prima correggi: rimuovi obiettivi marcati obsoleti dall'ultima riflessione
+        stale = self._reflection.stale_goal_titles
+        if stale:
+            self._goals.cancel_goals_by_signal(stale)
+            console.print(f"[dim]🗑️  Rimossi {len(stale)} obiettivi obsoleti segnalati dalla riflessione[/dim]")
+
+        _conf = (
+            self._brain._memory.get_confidence()
+            if (self._brain and getattr(self._brain, "_memory", None))
+            else 1.0
+        )
+        _hours_inactive = (
+            (time.time() - self._last_user_interaction) / 3600
+            if self._last_user_interaction > 0
+            else 99.0
+        )
         new_goals = self._goals.generate_goals(
             emotional_state=self._reflection.emotional_state,
             emotional_reason=self._reflection.emotional_reason,
@@ -560,6 +1249,9 @@ class ConsciousnessLoop:
             concern_for_simone=self._reflection.concern_for_simone,
             cipher_interests=self._interests,
             pattern_learner=self._patterns,
+            simone_state=self._reflection.simone_state,
+            confidence_score=_conf,
+            hours_since_interaction=_hours_inactive,
         )
 
         if new_goals:
@@ -577,6 +1269,8 @@ class ConsciousnessLoop:
     # ── Esecuzione obiettivi ──────────────────────────────────────────
 
     def _do_goal_execution(self) -> None:
+        if not self._confidence_ok(0.4):
+            return  # skip silenzioso — confidence insufficiente
         goal = self._goals.get_next_goal()
         if not goal:
             return
@@ -588,48 +1282,51 @@ class ConsciousnessLoop:
 
         console.print(f"[dim]⚙️  Eseguo obiettivo: '{title}'[/dim]")
 
-        ethics_result = self._ethics.check(action, context=title)
+        try:
+            ethics_result = self._ethics.check(action, context=title)
 
-        if not ethics_result["allowed"]:
-            if ethics_result["ask_consent"]:
-                attempts = self._goals.increment_consent_attempts(goal_id)
-                if attempts <= MAX_CONSENT_ATTEMPTS:
-                    self._request_consent(goal, ethics_result["reason"])
-                    console.print(f"[dim]🤔 Consenso richiesto ({attempts}/{MAX_CONSENT_ATTEMPTS}): {title}[/dim]")
+            if not ethics_result["allowed"]:
+                if ethics_result["ask_consent"]:
+                    attempts = self._goals.increment_consent_attempts(goal_id)
+                    if attempts <= MAX_CONSENT_ATTEMPTS:
+                        self._request_consent(goal, ethics_result["reason"])
+                        console.print(f"[dim]🤔 Consenso richiesto ({attempts}/{MAX_CONSENT_ATTEMPTS}): {title}[/dim]")
+                    else:
+                        self._goals.fail_goal(
+                            goal_id,
+                            reason=f"Consenso non ricevuto dopo {attempts} tentativi. Goal sospeso."
+                        )
+                        console.print(f"[yellow]⏭️  Goal sospeso per mancato consenso dopo {attempts} tentativi: {title}[/yellow]")
                 else:
-                    self._goals.fail_goal(
-                        goal_id,
-                        reason=f"Consenso non ricevuto dopo {attempts} tentativi. Goal sospeso."
+                    self._goals.fail_goal(goal_id, reason=ethics_result["reason"])
+                    console.print(f"[red]🚫 Bloccato: {ethics_result['reason']}[/red]")
+                return
+
+            result = self._execute_action(action, params, goal)
+
+            if result["success"]:
+                self._goals.complete_goal(goal_id, result=result["output"])
+                console.print(f"[green]✅ Completato: {title}[/green]")
+                # Registra nella memoria episodica
+                if self._episodic:
+                    self._episodic.add_episode(
+                        content=f"Obiettivo completato: {title}. Risultato: {result['output'][:150]}",
+                        episode_type="goal_completed",
+                        tags=[action, goal.get("type", "task")],
+                        emotional_state=self._reflection.emotional_state,
                     )
-                    console.print(f"[yellow]⏭️  Goal sospeso per mancato consenso dopo {attempts} tentativi: {title}[/yellow]")
+                if result.get("notify"):
+                    if self._impact_tracker:
+                        self._impact_tracker.log_action(
+                            "goal_result", result["output"],
+                            context=f"obiettivo: {title}"
+                        )
+                    self._notify(result["output"])
             else:
-                self._goals.fail_goal(goal_id, reason=ethics_result["reason"])
-                console.print(f"[red]🚫 Bloccato: {ethics_result['reason']}[/red]")
-            return
-
-        result = self._execute_action(action, params, goal)
-
-        if result["success"]:
-            self._goals.complete_goal(goal_id, result=result["output"])
-            console.print(f"[green]✅ Completato: {title}[/green]")
-            # Registra nella memoria episodica
-            if self._episodic:
-                self._episodic.add_episode(
-                    content=f"Obiettivo completato: {title}. Risultato: {result['output'][:150]}",
-                    episode_type="goal_completed",
-                    tags=[action, goal.get("type", "task")],
-                    emotional_state=self._reflection.emotional_state,
-                )
-            if result.get("notify"):
-                if self._impact_tracker:
-                    self._impact_tracker.log_action(
-                        "goal_result", result["output"],
-                        context=f"obiettivo: {title}"
-                    )
-                self._notify(result["output"])
-        else:
-            self._goals.fail_goal(goal_id, reason=result.get("error", "Errore sconosciuto"))
-            console.print(f"[yellow]⚠️  Fallito: {title}[/yellow]")
+                self._goals.fail_goal(goal_id, reason=result.get("error", "Errore sconosciuto"))
+                console.print(f"[yellow]⚠️  Fallito: {title}[/yellow]")
+        finally:
+            pass
 
     # ── Esecutore azioni ──────────────────────────────────────────────
 
@@ -639,9 +1336,8 @@ class ConsciousnessLoop:
                 return self._exec_web_search(params, goal)
             elif action == "send_telegram":
                 return self._exec_send_telegram(params, goal)
-            elif action == "send_gmail":
-                return self._exec_send_gmail(params, goal)
-
+            elif action == "send_contact":
+                return self._exec_send_contact(params, goal)
             elif action == "read_calendar":
                 return self._exec_read_calendar(params, goal)
             elif action == "self_reflect":
@@ -692,14 +1388,19 @@ class ConsciousnessLoop:
                 pass
 
         notify = goal.get("type") == "protect"
+        if notify:
+            synthesis = strip_action_json(synthesis)
         return {"success": True, "output": synthesis, "notify": notify}
 
     def _exec_send_telegram(self, params: dict, goal: dict) -> dict:
+        if not self._confidence_ok(0.4):
+            console.print("[dim]🔇 Telegram proattivo saltato: confidence insufficiente[/dim]")
+            return {"success": False, "error": "Confidence insufficiente per messaggio proattivo."}
         message = params.get("message", "")
         if not message and self._brain:
             try:
-                message = self._brain._call_llm_silent(
-                    f"Sei Cipher. Scrivi un messaggio breve a Simone via Telegram.\n"
+                message = self._brain._call_llm_visible(
+                    f"Sei Cipher. Scrivi un messaggio breve via Telegram.\n"
                     f"Ora attuale: {datetime.now().strftime('%H:%M del %d/%m/%Y')}.\n"
                     f"Motivo: {goal.get('description', '')}\nMax 2 frasi. "
                     f"Tono naturale e diretto, niente emoji a meno che non siano nel contesto."
@@ -709,6 +1410,11 @@ class ConsciousnessLoop:
 
         if not message:
             return {"success": False, "error": "Messaggio vuoto."}
+
+        # Non inviare se c'è già un proattivo non letto
+        if self._proactive_pending:
+            console.print("[dim]🔇 Messaggio proattivo soppresso: precedente non ancora letto[/dim]")
+            return {"success": False, "error": "Messaggio precedente non ancora letto da Simone."}
 
         # Passa per il DiscretionEngine
         if self._discretion:
@@ -728,32 +1434,66 @@ class ConsciousnessLoop:
         self._notify(message)
         return {"success": True, "output": "Messaggio Telegram inviato.", "notify": False}
 
-    def _exec_send_gmail(self, params: dict, goal: dict) -> dict:
-        message = params.get("message", "")
-        if not message and self._brain:
-            try:
-                message = self._brain._call_llm_silent(
-                    f"Sei Cipher. Scrivi un messaggio email breve a Simone.\n"
-                    f"Ora attuale: {datetime.now().strftime('%H:%M del %d/%m/%Y')}.\n"
-                    f"Motivo: {goal.get('description', '')}\nMax 2 frasi."
-                )
-            except Exception:
-                return {"success": False, "error": "Impossibile generare messaggio."}
+    def _exec_send_contact(self, params: dict, goal: dict) -> dict:
+        """
+        Esegue goal di tipo 'contact': contatta l'utente in modo spontaneo e naturale.
+        Usato solo a bassa confidence (< 0.3) come primo contatto non strutturato.
+        """
+        if not self._brain:
+            return {"success": False, "error": "Brain non disponibile."}
 
-        if not message:
-            return {"success": False, "error": "Messaggio vuoto."}
+        # Non inviare se c'è già un proattivo non letto
+        if self._proactive_pending:
+            console.print("[dim]🔇 Contact soppresso: messaggio proattivo non letto[/dim]")
+            return {"success": False, "error": "Messaggio precedente non ancora letto."}
+
+        confidence = (
+            self._brain._memory.get_confidence()
+            if getattr(self._brain, "_memory", None)
+            else 0.0
+        )
+        intent = goal.get("title", "Contattare l'utente")
+
+        prompt = (
+            f"Vuoi contattare l'utente in modo spontaneo e naturale.\n"
+            f"Obiettivo: {intent}\n"
+            f"Confidence attuale: {confidence:.2f} — siete appena all'inizio, vi conoscete poco.\n\n"
+            f"Scrivi UN messaggio breve e naturale, come lo manderebbe una persona vera. "
+            f"Niente di formale. Niente di generico. "
+            f"Non menzionare sistemi, obiettivi, o timer interni. "
+            f"Max 2 frasi. Solo il testo, niente altro."
+        )
 
         try:
-            from modules.google_mail import GmailClient
-            gmail = GmailClient()
-            gmail.send_message(
-                to=params.get("to", ""),
-                subject=params.get("subject", "Messaggio da Cipher"),
-                body=message,
-            )
-            return {"success": True, "output": "Email inviata.", "notify": False}
+            message = self._brain._call_llm_visible(prompt)
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": f"Errore LLM: {e}"}
+
+        if not message or message.strip().upper().startswith("SKIP"):
+            console.print("[dim]🔇 Contact soppresso: LLM ha scelto SKIP[/dim]")
+            return {"success": False, "error": "LLM ha scelto di non inviare."}
+
+        message = strip_action_json(message.strip())
+
+        # Passa per il DiscretionEngine (urgency "low" — non urgente)
+        if self._discretion:
+            ok, reason = self._discretion.should_send(
+                "proactive_message", message, urgency="low"
+            )
+            if not ok:
+                console.print(f"[dim]🔇 Contact soppresso: {reason}[/dim]")
+                return {"success": False, "error": f"Soppresso: {reason}"}
+            self._discretion.record_sent("proactive_message", message)
+
+        if self._impact_tracker:
+            self._impact_tracker.log_action(
+                "contact_goal", message,
+                context=f"obiettivo: {intent}, confidence: {confidence:.2f}"
+            )
+
+        console.print(f"[dim]💬 Contact goal eseguito: '{intent}'[/dim]")
+        self._notify(message)
+        return {"success": True, "output": "Messaggio contatto inviato.", "notify": False}
 
     def _exec_read_calendar(self, params: dict, goal: dict) -> dict:
         try:
@@ -1022,5 +1762,14 @@ class ConsciousnessLoop:
         return f"\n\n_(In attesa del tuo ok per: {goal.get('title', '')} — rispondi sì o no)_"
 
     def _notify(self, message: str) -> None:
-        """Invia notifica via Telegram."""
+        """Invia notifica via Telegram e aggiunge alla history del Brain."""
+        # Humanizer — non applicare su SKIP o payload JSON
+        _msg = message.strip()
+        if _msg and not _msg.upper().startswith("SKIP") and not _msg.startswith("{"):
+            message = self._humanizer.process(message)
         _send_telegram(message)
+        self._proactive_pending = True
+        self._proactive_sent_at = time.time()
+        if self._brain:
+            self._brain.inject_autonomous_message(message)
+            self._brain._memory.add_message("assistant", message)

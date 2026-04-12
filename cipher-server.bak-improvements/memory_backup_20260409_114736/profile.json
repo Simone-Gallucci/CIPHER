@@ -1,0 +1,18 @@
+{
+  "personal": {
+    "nome": "Simone",
+    "sito_web": "galluccisimone.it",
+    "residenza": "Angeli di Rosora",
+    "salute_cronica": "malattia muscolare degenerativa",
+    "stage": "Simone sta svolgendo uno stage ITS presso Logical System",
+    "stage_orario": "Lunedì-Venerdì, 9:00-13:00 e 14:00-18:00",
+    "sport/attività fisica": "Va in palestra (o pratica uno sport) da 15 anni, ma ora lo ha stancato. Non è chiaro se ci vada ancora per scelta o per abitudine/obbligo."
+  },
+  "preferences": {
+    "rapporti familiari": "preferisce non vedere certi parenti"
+  },
+  "facts": [
+    "Simone sviluppa app per aziende (contesto B2B)"
+  ],
+  "updated_at": "2026-04-08T00:00:00"
+}

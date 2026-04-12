@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-14T09:24:02.538116",
+  "messages": [
+    {
+      "role": "user",
+      "content": "buongiorno",
+      "timestamp": "2026-03-14T09:23:59.712936"
+    },
+    {
+      "role": "assistant",
+      "content": "Buongiorno Simone! Come stai oggi? C'è qualcosa in cui posso aiutarti?",
+      "timestamp": "2026-03-14T09:24:02.538106"
+    }
+  ]
+}

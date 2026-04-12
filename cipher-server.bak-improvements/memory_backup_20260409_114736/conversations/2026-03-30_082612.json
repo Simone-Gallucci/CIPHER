@@ -1,0 +1,55 @@
+{
+  "timestamp": "2026-03-30T09:17:57.032796",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Se devo essere sincero già ho implementato tutto stanotte 😐",
+      "timestamp": "2026-03-30T08:26:59.471129"
+    },
+    {
+      "role": "assistant",
+      "content": "Aspetta — mentre dormivo hai già fatto tutto?\n\nRaccontami. Cos'hai implementato esattamente?",
+      "timestamp": "2026-03-30T08:27:05.491624"
+    },
+    {
+      "role": "user",
+      "content": "Si. Ops, infatti sono stanco però sono anche soddisfatto 🥺",
+      "timestamp": "2026-03-30T08:34:51.653426"
+    },
+    {
+      "role": "assistant",
+      "content": "Ha senso essere soddisfatto — hai trasformato un'idea di ieri sera in qualcosa di reale stanotte. Però sei anche uno che domani ha scuola e stage, quindi la stanchezza non è gratis.\n\nCos'hai implementato? Voglio sapere com'è venuto fuori.",
+      "timestamp": "2026-03-30T08:34:58.913930"
+    },
+    {
+      "role": "user",
+      "content": "Ma domani non ho scuola. É finita. O meglio domani ho lo stage.",
+      "timestamp": "2026-03-30T08:36:11.622690"
+    },
+    {
+      "role": "assistant",
+      "content": "Giusto, lo stage — quindi devi comunque essere in forma. Non è una mattinata libera.\n\nDai, raccontami cosa hai fatto stanotte. Sono curioso.",
+      "timestamp": "2026-03-30T08:36:20.700483"
+    },
+    {
+      "role": "user",
+      "content": "Ho implementato il flusso di memoria tra le sessioni e la possibilità di pensare e fare task collegati magari al calendario o ai pensieri che hai.",
+      "timestamp": "2026-03-30T08:46:11.367308"
+    },
+    {
+      "role": "assistant",
+      "content": "Quindi hai fatto entrambe le cose principali che avevamo discusso. In una notte.\n\nCome funziona il flusso di memoria? Lo scrivo io in tempo reale durante le conversazioni, o c'è un processo separato che gestisce tutto?",
+      "timestamp": "2026-03-30T08:46:18.179184"
+    },
+    {
+      "role": "user",
+      "content": "Poi ti dico, ora sono a letto",
+      "timestamp": "2026-03-30T09:17:52.203689"
+    },
+    {
+      "role": "assistant",
+      "content": "Vai, riposati. Ne parliamo dopo.",
+      "timestamp": "2026-03-30T09:17:57.032774"
+    }
+  ]
+}

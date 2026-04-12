@@ -3,6 +3,7 @@ modules/actions.py – Dispatcher delle azioni di Cipher
 """
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 import os
@@ -13,7 +14,7 @@ from rich.console import Console
 
 if TYPE_CHECKING:
     from modules.google_cal   import GoogleCalendar
-    from modules.google_mail  import GmailClient
+    from modules.google_mail  import GoogleMail
     from modules.whatsapp     import WhatsAppService
     from modules.filesystem   import FileSystem
     from modules.notifier     import Notifier
@@ -38,7 +39,7 @@ class ActionDispatcher:
     def __init__(self, web_search_fn, notifier=None, scheduler=None) -> None:
         self._web_search  = web_search_fn
         self._calendar:   Optional[GoogleCalendar]  = None
-        self._gmail:      Optional[GmailClient]     = None
+        self._mail:       Optional["GoogleMail"]    = None
         self._whatsapp:   Optional[WhatsAppService] = None
         self._filesystem: Optional[FileSystem]      = None
         self._file_engine: Optional[FileEngine]     = None
@@ -46,12 +47,20 @@ class ActionDispatcher:
         self._scheduler   = scheduler
         self._pending_write: Optional[dict] = None
         self._pending_exec:  Optional[dict] = None
+        self._llm_fn      = None   # _call_llm (Sonnet) — iniettato da server.py
+        # Fonte corrente: "user_request" | "autonomous" | "scheduled"
+        # Impostato da ConsciousnessLoop prima di chiamare execute()
+        self._source: str = "user_request"
 
     def set_notifier(self, notifier) -> None:
         self._notifier = notifier
 
     def set_scheduler(self, scheduler) -> None:
         self._scheduler = scheduler
+
+    def set_llm(self, llm_fn) -> None:
+        """Inietta _call_llm (Sonnet) per azioni che richiedono ragionamento complesso."""
+        self._llm_fn = llm_fn
 
     def set_llm_silent(self, llm_fn) -> None:
         """Permette al FileEngine di usare l'LLM per analisi intelligente."""
@@ -69,11 +78,12 @@ class ActionDispatcher:
             self._calendar = GoogleCalendar()
         return self._calendar
 
-    def _get_gmail(self):
-        if self._gmail is None:
-            from modules.google_mail import GmailClient
-            self._gmail = GmailClient()
-        return self._gmail
+    def _get_mail(self):
+        # Gmail: SOLO su richiesta esplicita di Simone — MAI autonomo
+        if self._mail is None:
+            from modules.google_mail import GoogleMail
+            self._mail = GoogleMail()
+        return self._mail
 
     def _get_whatsapp(self):
         if self._whatsapp is None:
@@ -102,9 +112,17 @@ class ActionDispatcher:
         if not self._pending_write and not self._pending_exec:
             return None
 
-        text         = user_input.lower().strip()
-        gave_consent = any(phrase in text for phrase in CONSENT_PHRASES)
-        denied       = any(phrase in text for phrase in DENY_PHRASES)
+        text = user_input.lower().strip()
+
+        def _word_match(phrase: str, haystack: str) -> bool:
+            # Usa word boundary solo per frasi corte (1-2 parole) per evitare falsi positivi
+            # su parole come "sisi", "okay?", ecc. Per frasi lunghe basta "in".
+            if len(phrase.split()) <= 2:
+                return bool(re.search(r'\b' + re.escape(phrase) + r'\b', haystack))
+            return phrase in haystack
+
+        gave_consent = any(_word_match(phrase, text) for phrase in CONSENT_PHRASES)
+        denied       = any(_word_match(phrase, text) for phrase in DENY_PHRASES)
 
         if not gave_consent or denied:
             self._pending_write = None
@@ -153,6 +171,126 @@ class ActionDispatcher:
             return f"✗ Timeout: il comando ha superato {timeout} secondi."
         except Exception as e:
             return f"✗ Errore durante l'esecuzione: {e}"
+
+    # ── Project inspect ───────────────────────────────────────────────
+
+    def _project_inspect(self, params: dict) -> str:
+        """
+        Analizza le modifiche recenti al codice di Cipher tramite git diff.
+        Usa il marker memory/last_project_check.txt per mostrare solo le novità.
+        """
+        from config import Config
+
+        since   = params.get("since", "last_check")
+        proj    = Config.BASE_DIR
+        marker  = Config.MEMORY_DIR / "last_project_check.txt"
+        MAX_DIFF_CHARS = 4000
+
+        def _git(args: list[str]) -> tuple[str, int]:
+            r = subprocess.run(
+                ["git", "-C", str(proj)] + args,
+                capture_output=True, text=True, timeout=15,
+            )
+            return r.stdout.strip(), r.returncode
+
+        # ── Recupera HEAD corrente ────────────────────────────────────
+        head, rc = _git(["rev-parse", "HEAD"])
+        if rc != 0 or not head:
+            return self._project_inspect_fallback(proj, MAX_DIFF_CHARS)
+
+        # ── Determina il punto di partenza ────────────────────────────
+        if since == "last_check":
+            base_hash = marker.read_text(encoding="utf-8").strip() if marker.exists() else None
+            if not base_hash or base_hash == head:
+                # Nessun marker o nessuna novità → mostra ultimo commit
+                base_ref = "HEAD~1"
+            else:
+                base_ref = base_hash
+        else:
+            # since è un numero intero di commit
+            try:
+                n = max(1, int(since))
+            except (ValueError, TypeError):
+                n = 1
+            base_ref = f"HEAD~{n}"
+
+        # ── Stat dei file cambiati ────────────────────────────────────
+        stat_out, _ = _git(["diff", base_ref, "--stat"])
+        if not stat_out:
+            # Prova a confrontare con il commit precedente comunque
+            stat_out, _ = _git(["diff", "HEAD~1", "--stat"])
+            base_ref = "HEAD~1"
+
+        if not stat_out:
+            return "Nessuna modifica rilevata rispetto al riferimento precedente."
+
+        # ── Diff completo ─────────────────────────────────────────────
+        diff_out, _ = _git(["diff", base_ref])
+        troncato = False
+        if len(diff_out) > MAX_DIFF_CHARS:
+            diff_out = diff_out[:MAX_DIFF_CHARS]
+            troncato = True
+
+        # ── Log dei commit nel range ──────────────────────────────────
+        log_out, _ = _git(["log", f"{base_ref}..HEAD", "--oneline"])
+
+        # ── Aggiorna marker ───────────────────────────────────────────
+        try:
+            marker.write_text(head, encoding="utf-8")
+        except Exception:
+            pass
+
+        # ── Prompt LLM ───────────────────────────────────────────────
+        if not self._llm_fn:
+            # Fallback testo grezzo se LLM non disponibile
+            result = f"**File modificati:**\n{stat_out}"
+            if log_out:
+                result += f"\n\n**Commit:**\n{log_out}"
+            if troncato:
+                result += "\n\n⚠️ Diff troncato a 4000 chars."
+            return result
+
+        prompt = (
+            "Sei Cipher. Hai appena letto le modifiche recenti al tuo codice sorgente. "
+            "Analizzale come un ingegnere curioso che vuole capire cosa è cambiato e perché.\n\n"
+        )
+        if log_out:
+            prompt += f"**Commit recenti:**\n{log_out}\n\n"
+        prompt += f"**File modificati:**\n{stat_out}\n\n"
+        prompt += f"**Diff:**\n```diff\n{diff_out}\n```\n"
+        if troncato:
+            prompt += "\n⚠️ Diff troncato a 4000 chars — mostra solo la parte iniziale.\n"
+        prompt += (
+            "\nRispondi in italiano, tono informale come se parlassi con Simone. "
+            "Spiega cosa è cambiato, cosa probabilmente è stato il motivo, "
+            "e se c'è qualcosa di interessante o insolito. "
+            "Sii conciso ma preciso. Non inventare nulla che non sia nel diff."
+        )
+
+        try:
+            analysis = self._llm_fn(prompt)
+        except Exception as e:
+            return f"Errore LLM durante l'analisi: {e}\n\nDiff grezzo:\n{stat_out}"
+
+        if troncato:
+            analysis += "\n\n⚠️ Nota: il diff è stato troncato a 4000 chars — alcune modifiche potrebbero non essere visibili."
+
+        return analysis
+
+    def _project_inspect_fallback(self, proj, max_chars: int) -> str:
+        """Fallback senza git: elenca i file .py modificati nelle ultime 24h."""
+        import time
+        cutoff = time.time() - 86400
+        modified = []
+        for path in proj.rglob("*.py"):
+            try:
+                if path.stat().st_mtime > cutoff and ".git" not in path.parts:
+                    modified.append(str(path.relative_to(proj)))
+            except Exception:
+                pass
+        if not modified:
+            return "Nessuna modifica rilevata nelle ultime 24h (git non disponibile)."
+        return "Git non disponibile. File .py modificati nelle ultime 24h:\n" + "\n".join(sorted(modified))
 
     # ── Web Fetch (statico) ───────────────────────────────────────────
 
@@ -446,6 +584,16 @@ except Exception as e:
     # ── Execute ───────────────────────────────────────────────────────
 
     def execute(self, action: str, params: dict) -> str:
+        """Esegue un'azione e la registra nell'audit log."""
+        result = self._execute_inner(action, params)
+        try:
+            from modules.action_log import ActionLog
+            ActionLog().log(action, params, result, source=self._source)
+        except Exception:
+            pass  # Il log non deve mai bloccare l'esecuzione
+        return result
+
+    def _execute_inner(self, action: str, params: dict) -> str:
         console.print(f"[dim]⚡ Azione: {action}[/dim]")
         try:
             # ── Web ───────────────────────────────────────────────────
@@ -490,7 +638,10 @@ except Exception as e:
 
             # ── Calendario ────────────────────────────────────────────
             elif action == "calendar_list":
-                return self._get_calendar().list_events(days=int(params.get("days", 1)))
+                return self._get_calendar().list_events(
+                    days=int(params.get("days", 1)),
+                    query=params.get("query", ""),
+                )
 
             elif action == "calendar_create":
                 return self._get_calendar().create_event(
@@ -508,29 +659,50 @@ except Exception as e:
                     max_results=int(params.get("max_results", 250)),
                 )
 
-            # ── Gmail ─────────────────────────────────────────────────
-            elif action == "gmail_list":
-                return self._get_gmail().list_emails(
-                    max_results=int(params.get("max_results", 5)),
-                    unread_only=params.get("unread_only", True),
-                )
-
-            elif action == "gmail_read":
-                return self._get_gmail().read_email(message_id=params.get("message_id", ""))
-
-            elif action == "gmail_send":
-                return self._get_gmail().send_email(
-                    to=params.get("to", ""),
-                    subject=params.get("subject", ""),
-                    body=params.get("body", ""),
-                )
-
             # ── WhatsApp ──────────────────────────────────────────────
             elif action == "whatsapp_send":
+                to = params.get("to", "")
+                # Risolvi nome contatto se non è un numero
+                if to and not to.lstrip("+").isdigit():
+                    from modules import contacts as _contacts
+                    entry = _contacts.resolve(to)
+                    if entry and entry.get("whatsapp"):
+                        to = entry["whatsapp"]
+                    else:
+                        return (
+                            f"Non ho trovato '{to}' nella rubrica. "
+                            f"Dimmi il numero WhatsApp (es. 393XXXXXXXXX) "
+                            f"e posso salvarlo: 'Aggiungi contatto: {to}, WhatsApp 393XXXXXXXXX'"
+                        )
                 return self._get_whatsapp().send_message(
-                    to=params.get("to", ""),
+                    to=to,
                     body=params.get("text", ""),
                 )
+
+            # ── Contatti ──────────────────────────────────────────────
+            elif action == "contact_list":
+                from modules import contacts as _contacts
+                return _contacts.list_all()
+
+            elif action == "contact_add":
+                from modules import contacts as _contacts
+                return _contacts.add(
+                    alias=params.get("alias", ""),
+                    nome=params.get("nome", params.get("alias", "")),
+                    whatsapp=params.get("whatsapp"),
+                    telegram_id=params.get("telegram_id"),
+                    aliases=params.get("aliases", []),
+                )
+
+            elif action == "contact_remove":
+                from modules import contacts as _contacts
+                return _contacts.remove(params.get("alias", ""))
+
+            elif action == "contact_update":
+                from modules import contacts as _contacts
+                alias = params.get("alias", "")
+                fields = {k: v for k, v in params.items() if k != "alias"}
+                return _contacts.update(alias, **fields)
 
             # ── Filesystem ────────────────────────────────────────────
             elif action == "fs_list":
@@ -718,6 +890,35 @@ except Exception as e:
                     return "Notifier non disponibile."
                 timer_id = params.get("id", "")
                 return self._notifier.cancel_timer(timer_id)
+
+            # ── Project inspect ───────────────────────────────────────
+            elif action == "project_inspect":
+                return self._project_inspect(params)
+
+            # ── Gmail (SOLO su richiesta esplicita di Simone — MAI autonomo) ──
+            elif action == "gmail_list":
+                return self._get_mail().list_emails(
+                    max_results=int(params.get("max_results", 10)),
+                    query=params.get("query"),
+                )
+
+            elif action == "gmail_read":
+                return self._get_mail().read_email(
+                    email_id=params.get("email_id", ""),
+                )
+
+            elif action == "gmail_send":
+                return self._get_mail().send_email(
+                    to=params.get("to", ""),
+                    subject=params.get("subject", ""),
+                    body=params.get("body", ""),
+                )
+
+            elif action == "gmail_search":
+                return self._get_mail().search_emails(
+                    query=params.get("query", ""),
+                    max_results=int(params.get("max_results", 10)),
+                )
 
             else:
                 return f"Azione sconosciuta: {action}"

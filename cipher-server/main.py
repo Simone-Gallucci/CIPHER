@@ -23,7 +23,7 @@ from modules.consciousness_loop import ConsciousnessLoop
 console = Console()
 
 EXIT_TRIGGERS  = {"esci", "exit", "quit", "shutdown", "spegni"}
-RESET_TRIGGERS = {"resetta", "reset", "nuova conversazione", "resetta conversazione"}
+RESET_TRIGGERS = {"resetta", "reset"}
 
 
 def is_exit(text: str) -> bool:
@@ -72,10 +72,15 @@ def run_text_mode(brain: Brain, voice: Voice) -> None:
             sys.exit(0)
         if is_reset(user_input):
             brain.reset()
+            console.clear()
+            console.print("[bold cyan]↺ Conversazione resettata.[/bold cyan]\n")
             voice.speak("Conversazione resettata.")
             continue
 
         response = brain.think(user_input)
+        if response.startswith("__RESET__"):
+            response = response[len("__RESET__"):]
+            console.clear()
         voice.speak(response)
         console.print(f"[dim](messaggi in sessione: {brain.history_length})[/dim]\n")
 
@@ -112,10 +117,15 @@ def run_voice_mode(brain: Brain, voice: Voice) -> None:
                 sys.exit(0)
             if is_reset(command):
                 brain.reset()
+                console.clear()
+                console.print("[bold cyan]↺ Conversazione resettata.[/bold cyan]\n")
                 voice.speak("Conversazione resettata.")
                 continue
 
             response = brain.think(command)
+            if response.startswith("__RESET__"):
+                response = response[len("__RESET__"):]
+                console.clear()
             voice.speak(response)
             console.print(f"[dim](messaggi in sessione: {brain.history_length})[/dim]\n")
     finally:
@@ -193,12 +203,17 @@ def run_both_mode(brain: Brain, voice: Voice) -> None:
             if is_reset(text):
                 with processing_lock:
                     brain.reset()
+                    console.clear()
+                    console.print("[bold cyan]↺ Conversazione resettata.[/bold cyan]\n")
                     voice.speak("Conversazione resettata.")
                 continue
 
             if processing_lock.acquire(blocking=False):
                 try:
                     response = brain.think(text)
+                    if response.startswith("__RESET__"):
+                        response = response[len("__RESET__"):]
+                        console.clear()
                     voice.speak(response)
                     console.print(
                         f"[dim](messaggi in sessione: {brain.history_length})[/dim]\n"

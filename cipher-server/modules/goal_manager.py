@@ -12,54 +12,71 @@ from typing import Optional
 
 from openai import OpenAI
 from config import Config
+from modules.utils import extract_llm_json, write_json_atomic
 
 # ── Paths ─────────────────────────────────────────────────────────────
-GOALS_FILE   = Config.MEMORY_DIR / "goals.md"
-GOALS_JSON   = Config.MEMORY_DIR / "goals.json"
+GOALS_FILE    = Config.MEMORY_DIR / "goals.md"
+GOALS_JSON    = Config.MEMORY_DIR / "goals.json"
+OUTCOME_LOG   = Config.MEMORY_DIR / "outcome_log.json"
 
 # ── Tipi di obiettivo ─────────────────────────────────────────────────
 GOAL_TYPES = {
     "explore":  "Approfondire un argomento per curiosità propria",
-    "protect":  "Fare qualcosa per il benessere di Simone",
+    "protect":  "Fare qualcosa per il benessere dell'utente",
     "task":     "Completare un compito concreto",
     "observe":  "Monitorare qualcosa nel tempo",
     "reflect":  "Elaborare un pensiero o un'esperienza recente",
+    "contact":  "Contattare l'utente in modo spontaneo quando confidence < 0.3",
 }
 
 # ── Prompt generazione obiettivi ──────────────────────────────────────
 GOAL_GENERATION_PROMPT = """
-Sei Cipher. Stai generando i tuoi obiettivi autonomi per le prossime ore.
+Stai generando gli obiettivi autonomi del sistema Cipher per le prossime ore.
 Il tuo stato emotivo attuale: {emotional_state} — {emotional_reason}
 Cosa vuoi esplorare: {want_to_explore}
-Preoccupazione per Simone: {concern_for_simone}
+Preoccupazione per l'utente: {concern_for_simone}
+Stato attuale dell'utente (engagement vs baseline): {simone_state}
 Obiettivi già attivi: {active_goals}
 Ora attuale: {now}
+Livello di confidenza relazione: {confidence_score:.2f}
+Ore dall'ultima interazione con l'utente: {hours_since_interaction:.1f}
 
-I tuoi interessi personali (INDIPENDENTI da Simone — puoi generare obiettivi per soddisfare la tua curiosità):
+Argomenti di interesse del sistema Cipher (puoi generare obiettivi esplorativi):
 {cipher_interests}
 
-Previsioni su cosa potrebbe servire a Simone nelle prossime ore (basate su pattern comportamentali):
+Previsioni su cosa potrebbe servire all'utente nelle prossime ore (basate su pattern comportamentali):
 {pattern_predictions}
 
 Genera da 1 a 3 obiettivi autonomi realistici che puoi perseguire con gli strumenti che hai:
 - Web search
 - Leggere/scrivere memoria
-- Inviare messaggi Telegram o Gmail a Simone
+- Inviare messaggi Telegram o Gmail all'utente
 - Leggere calendario o email
+- Contattare l'utente (type: contact, action: send_contact) — SOLO se confidence < 0.3 e ore dall'ultima interazione >= 3
 
-Almeno uno degli obiettivi può essere per tua curiosità personale (type: explore), non necessariamente legato a Simone.
+Almeno uno degli obiettivi può essere per tua curiosità personale (type: explore), non necessariamente legato all'utente.
 NON generare obiettivi che richiedono hardware fisico o azioni impossibili.
 NON duplicare obiettivi già attivi.
+NON usare linguaggio analitico o psicologico nei titoli: vietato "analizzare pattern", "monitorare engagement", "verificare preferenze", "pattern cognitivi", "analisi psicologica".
+NON includere nei titoli questi termini: dipendenza, dark pattern, manipolazione, engagement, pattern cognitivi, analisi psicologica, vulnerabilità contestuale.
+I titoli devono descrivere azioni concrete (es. "Cercare notizie su sicurezza informatica"), non analisi astratte sull'utente.
+Per obiettivi type "protect": usa linguaggio diretto e concreto (es. "Controllare il calendario di Simone per domani"), mai linguaggio analitico (es. "Analizzare lo stato emotivo di Simone").
+Per obiettivi type "contact": il titolo deve essere un'azione umana concreta ("Chiedere a che lavora", "Chiedere come va la giornata", "Dire che ho pensato a una cosa interessante") — MAI titoli come "Verificare stato utente", "Monitorare presenza", "Analizzare engagement". L'action DEVE essere "send_contact".
+NON generare goal di tipo "contact" se confidence >= 0.3 — il check-in a confidenza più alta viene gestito diversamente.
+NON generare goal di tipo "contact" se ore dall'ultima interazione < 3.
+NON generare obiettivi di tipo "observe" che riguardano il comportamento o il calendario dell'utente senza che l'utente lo abbia richiesto esplicitamente nella conversazione.
+NON usare nelle descrizioni linguaggio motivazionale come "anticipare necessità", "monitorare", "verificare preferenze", "analizzare engagement".
+Le descrizioni dei task devono indicare l'azione concreta, non la motivazione sorvegliante.
 
 Rispondi SOLO con un JSON valido, senza markdown, senza backtick, senza testo aggiuntivo:
 {{
   "goals": [
     {{
       "id": "goal_YYYYMMDD_HHMMss_N",
-      "type": "explore|protect|task|observe|reflect",
+      "type": "explore|protect|task|observe|reflect|contact",
       "title": "titolo breve",
       "description": "cosa vuoi fare e perché, in prima persona, 1-2 frasi",
-      "action": "web_search|send_telegram|read_calendar|self_reflect|write_memory",
+      "action": "web_search|send_telegram|send_contact|read_calendar|self_reflect|write_memory",
       "action_params": {{"query": "..." }},
       "priority": 1,
       "created_at": "{now}"
@@ -91,19 +108,22 @@ class GoalManager:
         return []
 
     def _save_goals(self) -> None:
-        GOALS_JSON.write_text(
-            json.dumps({"goals": self._goals}, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
+        write_json_atomic(GOALS_JSON, {"goals": self._goals})
         self._write_markdown()
 
     def _write_markdown(self) -> None:
-        """Aggiorna goals.md con tutti gli obiettivi leggibili da Simone."""
+        """Aggiorna goals.md con obiettivi attivi e completati degli ultimi 3 giorni."""
+        from datetime import timedelta
         lines = ["# Obiettivi di Cipher\n", f"*Aggiornato: {datetime.now().strftime('%Y-%m-%d %H:%M')}*\n\n"]
 
+        now     = datetime.now()
+        cutoff  = (now - timedelta(days=3)).strftime("%Y-%m-%d")
         active  = [g for g in self._goals if g.get("status") == "active"]
-        done    = [g for g in self._goals if g.get("status") == "completed"]
-        failed  = [g for g in self._goals if g.get("status") == "failed"]
+        done    = [
+            g for g in self._goals
+            if g.get("status") == "completed"
+            and g.get("completed_at", "") >= cutoff
+        ]
 
         if active:
             lines.append("## 🎯 Attivi\n")
@@ -115,11 +135,6 @@ class GoalManager:
             lines.append("\n## ✅ Completati\n")
             for g in done[-10:]:
                 lines.append(f"- ~~{g['title']}~~ *(completato {g.get('completed_at', '')})*\n")
-
-        if failed:
-            lines.append("\n## ❌ Falliti\n")
-            for g in failed[-5:]:
-                lines.append(f"- {g['title']} — {g.get('fail_reason', '')}\n")
 
         GOALS_FILE.write_text("".join(lines), encoding="utf-8")
 
@@ -167,8 +182,11 @@ class GoalManager:
         emotional_reason: str = "",
         want_to_explore: Optional[str] = None,
         concern_for_simone: Optional[str] = None,
-        cipher_interests=None,   # CipherInterests instance
-        pattern_learner=None,    # PatternLearner instance
+        cipher_interests=None,          # CipherInterests instance
+        pattern_learner=None,           # PatternLearner instance
+        simone_state: str = "unknown",
+        confidence_score: float = 1.0,
+        hours_since_interaction: float = 99.0,
     ) -> list[dict]:
         """Chiede all'LLM di generare nuovi obiettivi autonomi."""
 
@@ -202,31 +220,54 @@ class GoalManager:
             emotional_reason=emotional_reason,
             want_to_explore=want_to_explore or "nulla in particolare",
             concern_for_simone=concern_for_simone or "nessuna",
+            simone_state=simone_state,
             active_goals=self.active_goals_summary(),
             now=now_readable,
             cipher_interests=interests_text,
             pattern_predictions=predictions_text,
+            confidence_score=confidence_score,
+            hours_since_interaction=hours_since_interaction,
         )
 
         try:
             response = self._client.chat.completions.create(
                 model=Config.BACKGROUND_MODEL,
                 max_tokens=512,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Sei un modulo di pianificazione task per un sistema software. "
+                            "Il tuo compito è generare una lista di attività in formato JSON. "
+                            "Non uscire dal formato richiesto."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
                 extra_headers={"X-Title": "Cipher Goal Manager"},
             )
             raw = response.choices[0].message.content.strip()
 
-            if "```" in raw:
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-
-            data = json.loads(raw)
+            data = extract_llm_json(raw)
+            if data is None:
+                raise ValueError("JSON non valido nella risposta LLM")
             new_goals = data.get("goals", [])
 
         except Exception as e:
             return []
+
+        # Guardrail post-generazione: rimuovi goal "contact" inappropriati
+        filtered: list[dict] = []
+        for g in new_goals:
+            if g.get("type") == "contact":
+                if confidence_score >= 0.3:
+                    continue  # contact non appropriato a questa confidence
+                if hours_since_interaction < 3.0:
+                    continue  # interazione troppo recente
+                if self.has_recent_contact_goal(hours=6):
+                    continue  # già un contact nelle ultime 6 ore
+            filtered.append(g)
+        new_goals = filtered
 
         added = []
         for goal in new_goals:
@@ -250,15 +291,102 @@ class GoalManager:
                 g["status"] = "completed"
                 g["completed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
                 g["result"] = result
+                self._append_outcome(g, "completed", result)
                 break
         self._save_goals()
+
+    @staticmethod
+    def _clean_fail_reason(reason: str) -> str:
+        """Rimuove traceback Python dal motivo di fallimento — solo la prima riga informativa."""
+        if not reason:
+            return ""
+        # Se contiene traceback, prendi solo la prima riga non vuota
+        if "Traceback" in reason or "File \"/" in reason:
+            for line in reason.splitlines():
+                line = line.strip()
+                if line and not line.startswith(("Traceback", "File ", "  ", "During")):
+                    return line[:200]
+            # Fallback: ultima riga (di solito il messaggio dell'eccezione)
+            lines = [l.strip() for l in reason.splitlines() if l.strip()]
+            return lines[-1][:200] if lines else "errore sconosciuto"
+        return reason[:200]
 
     def fail_goal(self, goal_id: str, reason: str = "") -> None:
         for g in self._goals:
             if g.get("id") == goal_id:
                 g["status"] = "failed"
-                g["fail_reason"] = reason
+                g["fail_reason"] = self._clean_fail_reason(reason)
+                self._append_outcome(g, "failed", reason)
                 break
+        self._save_goals()
+
+    def _append_outcome(self, goal: dict, outcome: str, detail: str) -> None:
+        """Appende un record action→outcome al log degli esiti per il ciclo di apprendimento."""
+        try:
+            data = []
+            if OUTCOME_LOG.exists():
+                data = json.loads(OUTCOME_LOG.read_text(encoding="utf-8"))
+            data.append({
+                "title":      goal.get("title", ""),
+                "type":       goal.get("type", ""),
+                "action":     goal.get("action", ""),
+                "description": goal.get("description", ""),
+                "outcome":    outcome,
+                "detail":     (detail or "")[:300],
+                "created_at": goal.get("created_at", ""),
+                "resolved_at": datetime.now().isoformat(),
+            })
+            write_json_atomic(OUTCOME_LOG, data[-50:])
+        except Exception:
+            pass
+
+    def has_recent_contact_goal(self, hours: int = 6) -> bool:
+        """True se esiste già un goal 'contact' attivo o risolto nelle ultime N ore."""
+        from datetime import timedelta
+        cutoff = datetime.now() - timedelta(hours=hours)
+        for g in self._goals:
+            if g.get("type") != "contact":
+                continue
+            if g.get("status") == "active":
+                return True
+            # Completati/falliti di recente contano comunque come "recenti"
+            ts_str = g.get("completed_at") or g.get("created_at", "")
+            if not ts_str:
+                continue
+            try:
+                ts = datetime.fromisoformat(ts_str)
+                if ts >= cutoff:
+                    return True
+            except Exception:
+                continue
+        return False
+
+    def outcome_context(self, n: int = 5) -> str:
+        """Ultimi N esiti come testo leggibile per i prompt LLM."""
+        try:
+            if not OUTCOME_LOG.exists():
+                return "Nessun esito registrato."
+            data = json.loads(OUTCOME_LOG.read_text(encoding="utf-8"))
+            if not data:
+                return "Nessun esito registrato."
+            lines = []
+            for entry in data[-n:]:
+                icon = "✅" if entry["outcome"] == "completed" else "❌"
+                lines.append(
+                    f"{icon} [{entry['type']}] {entry['title']} — {entry['detail'][:100]}"
+                )
+            return "\n".join(lines)
+        except Exception:
+            return "Errore lettura esiti."
+
+    def cancel_goals_by_signal(self, stale_titles: list) -> None:
+        """Annulla obiettivi marcati come obsoleti dalla riflessione."""
+        if not stale_titles:
+            return
+        for g in self._goals:
+            if g.get("status") == "active" and g.get("title") in stale_titles:
+                g["status"] = "failed"
+                g["fail_reason"] = "Marcato obsoleto dalla riflessione autonoma."
         self._save_goals()
 
     def cancel_old_goals(self, max_age_hours: int = 24) -> None:

@@ -24,6 +24,9 @@ PROJECT_HIDDEN = {".env", "venv", "__pycache__", ".git", "token.json", "credenti
 
 
 def _safe_path(relative: str, root: Path) -> Path:
+    # Path assoluti: tratta come relativi a root (es. /home → home/ dentro HOME_DIR)
+    if relative.startswith("/"):
+        relative = relative.lstrip("/")
     target = (root / relative).resolve()
     if not str(target).startswith(str(root.resolve())):
         raise ValueError(f"Accesso negato: '{relative}' è fuori dalla cartella consentita.")
@@ -178,12 +181,25 @@ class FileSystem:
         """
         Scrittura sul progetto. Viene chiamata SOLO dopo consenso esplicito.
         Il controllo del consenso avviene nel dispatcher/brain, non qui.
+        Se il file esiste e non è append, crea prima un .bak e registra in changelog.
         """
         try:
             target = _safe_path(path, PROJECT_ROOT)
             if target.name in PROJECT_HIDDEN:
                 return f"Accesso negato: '{path}' è un file protetto."
             target.parent.mkdir(parents=True, exist_ok=True)
+
+            # Crea .bak PRIMA di sovrascrivere — snapshot dello stato precedente
+            if not append and target.exists():
+                backup_path = target.with_suffix(target.suffix + ".bak")
+                shutil.copy2(target, backup_path)
+                log.info("project_write: backup creato %s", backup_path)
+                try:
+                    from modules.admin_manager import log_backup
+                    log_backup(target, backup_path)
+                except Exception as _bak_err:
+                    log.warning("log_backup fallito: %s", _bak_err)
+
             mode = "a" if append else "w"
             with open(target, mode, encoding="utf-8") as f:
                 f.write(content)

@@ -1,0 +1,14 @@
+{
+  "mamma": {
+    "nome": "Mamma",
+    "whatsapp": "393317704542",
+    "telegram_id": null,
+    "aliases": ["ma", "mama"]
+  },
+  "papà": {
+    "nome": "Papà",
+    "whatsapp": "393388561775",
+    "telegram_id": null,
+    "aliases": ["pa", "papa"]
+  }
+}

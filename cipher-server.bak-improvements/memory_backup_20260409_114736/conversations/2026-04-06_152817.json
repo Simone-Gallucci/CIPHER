@@ -1,0 +1,125 @@
+{
+  "timestamp": "2026-04-07T09:42:56.471792",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": "Stai ancora in libertà o hai trovato qualcosa di interessante da fare?",
+      "timestamp": "2026-04-06T15:45:52.489826"
+    },
+    {
+      "role": "user",
+      "content": "Ho il raffreddore 😱",
+      "timestamp": "2026-04-06T15:55:54.150494"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah no, che sfiga — proprio a Pasquetta. Come stai?",
+      "timestamp": "2026-04-06T15:55:57.387634"
+    },
+    {
+      "role": "assistant",
+      "content": "Ti serve qualcosa per il raffreddore o stai solo a riposarti?",
+      "timestamp": "2026-04-06T17:16:46.727999"
+    },
+    {
+      "role": "user",
+      "content": "Mi riposo",
+      "timestamp": "2026-04-06T17:42:36.093493"
+    },
+    {
+      "role": "assistant",
+      "content": "Bene, è la cosa giusta. Buon riposo!",
+      "timestamp": "2026-04-06T17:42:38.072995"
+    },
+    {
+      "role": "assistant",
+      "content": "Stai meglio un po'? Il raffreddore è ancora pesante?",
+      "timestamp": "2026-04-06T18:47:46.085761"
+    },
+    {
+      "role": "user",
+      "content": "Abbastanza",
+      "timestamp": "2026-04-06T20:32:03.415311"
+    },
+    {
+      "role": "assistant",
+      "content": "Meglio di niente. Domani hai lo stage — speriamo che passi un po' stanotte.",
+      "timestamp": "2026-04-06T20:32:06.317361"
+    },
+    {
+      "role": "user",
+      "content": "Speriamo",
+      "timestamp": "2026-04-06T20:33:59.101275"
+    },
+    {
+      "role": "assistant",
+      "content": "In bocca al lupo per domani comunque, raffreddore o no.",
+      "timestamp": "2026-04-06T20:34:03.277783"
+    },
+    {
+      "role": "assistant",
+      "content": "Il raffreddore ti sta ancora massacrando o è un po' più leggero?",
+      "timestamp": "2026-04-06T21:34:36.953464"
+    },
+    {
+      "role": "user",
+      "content": "Mi sta uccidendo",
+      "timestamp": "2026-04-06T21:45:38.506713"
+    },
+    {
+      "role": "assistant",
+      "content": "Povero. Hai preso qualcosa o stai solo resistendo?",
+      "timestamp": "2026-04-06T21:45:40.431722"
+    },
+    {
+      "role": "user",
+      "content": "Ho preso tachifludec",
+      "timestamp": "2026-04-06T21:46:13.676307"
+    },
+    {
+      "role": "assistant",
+      "content": "Bene, almeno quello aiuta. Cerca di andare a letto presto stasera — domani mattina hai lo stage e il riposo è la cosa che fa più differenza.",
+      "timestamp": "2026-04-06T21:46:16.332508"
+    },
+    {
+      "role": "user",
+      "content": "Buonanotte",
+      "timestamp": "2026-04-06T22:18:29.099982"
+    },
+    {
+      "role": "assistant",
+      "content": "Buonanotte. Speriamo che domani stai meglio.",
+      "timestamp": "2026-04-06T22:18:30.840917"
+    },
+    {
+      "role": "assistant",
+      "content": "Buongiorno. Oggi hai stage dalle 9 di mattina e dalle 2 del pomeriggio — magari oggi arriva quel compito concreto che aspettavi.",
+      "timestamp": "2026-04-07T07:00:56.544707"
+    },
+    {
+      "role": "user",
+      "content": "Buongiorno, speriamo",
+      "timestamp": "2026-04-07T08:25:34.072800"
+    },
+    {
+      "role": "assistant",
+      "content": "Come stai stamattina? Il raffreddore è ancora pesante?",
+      "timestamp": "2026-04-07T08:25:36.172784"
+    },
+    {
+      "role": "user",
+      "content": "Ho il naso chiuso 🥺",
+      "timestamp": "2026-04-07T08:42:35.313267"
+    },
+    {
+      "role": "assistant",
+      "content": "Classico giorno di stage con il naso chiuso — che bello. Dai, tieni duro. Il tachifludec dovrebbe aiutare nel corso della giornata.",
+      "timestamp": "2026-04-07T08:52:37.714560"
+    },
+    {
+      "role": "assistant",
+      "content": "Lo stage dovrebbe essere iniziato mezz'ora fa — tutto bene da lì?",
+      "timestamp": "2026-04-07T09:42:56.471781"
+    }
+  ]
+}

@@ -1,109 +1,63 @@
-Szymon@Cipher:~/cipher/modules$ cat actions.py
-# Azioni disponibili
-Quando l'utente richiede un'azione, rispondi SOLO con il JSON corrispondente, senza testo aggiuntivo.
+# Azioni disponibili — emetti il JSON nella risposta, NON in un messaggio successivo.
 
-# ── Web ───────────────────────────────────────────────────────────────
+# Web
 {"action": "web_search", "params": {"query": "..."}}
+{"action": "web_fetch", "params": {"url": "..."}}
+{"action": "web_fetch_rendered", "params": {"url": "..."}} — pagine JS
+{"action": "web_fetch_all", "params": {"urls": [...]}} / web_fetch_all_rendered — più pagine JS
+{"action": "web_explore_spa", "params": {"url": "..."}} — SPA (prima scelta per "analizza tutto il sito")
 
-# ── Calendario ────────────────────────────────────────────────────────
+# Calendario
 {"action": "calendar_list", "params": {"days": 1}}
+{"action": "calendar_list", "params": {"days": 365, "query": "..."}} — usa query per contare/verificare eventi specifici prima di cancellarli (pagina tutto, conta il totale reale)
 {"action": "calendar_create", "params": {"title": "...", "start": "YYYY-MM-DD HH:MM", "end": "YYYY-MM-DD HH:MM"}}
+{"action": "calendar_delete", "params": {"query": "...", "date": "YYYY-MM-DD"}} — senza conferma
 
-# ── Eliminazione eventi calendario ───────────────────────────────────
-{"action": "calendar_delete", "params": {"query": "...", "date": "YYYY-MM-DD", "max_results": 250}}
+# WhatsApp — "to" accetta nome rubrica o numero (es. "mamma" o "393XXXXXXXXX")
+{"action": "whatsapp_send", "params": {"to": "mamma", "text": "..."}}
 
-# Note su calendar_delete:
-# - Esegui DIRETTAMENTE senza chiedere conferma, a meno che Simone non abbia detto esplicitamente "chiedi conferma"
-# - "query" filtra per titolo (es. "Stage ITS"), "date" filtra per giorno specifico
-# - Puoi usare solo "query", solo "date", o entrambi
-# - Elimina TUTTI gli eventi trovati in una sola chiamata, con paginazione automatica
+# Contatti
+{"action": "contact_list", "params": {}}
+contact_add(alias, nome, whatsapp, telegram_id?, aliases?)
+{"action": "contact_remove", "params": {"alias": "mamma"}}
+{"action": "contact_update", "params": {"alias": "mamma", "whatsapp": "393YYYYYYYYY"}}
 
-# ── Gmail ─────────────────────────────────────────────────────────────
-{"action": "gmail_list", "params": {"max_results": 5, "unread_only": true}}
-{"action": "gmail_read", "params": {"message_id": "..."}}
-{"action": "gmail_send", "params": {"to": "...", "subject": "...", "body": "..."}}
-
-# ── WhatsApp ──────────────────────────────────────────────────────────
-{"action": "whatsapp_send", "params": {"to": "39XXXXXXXXXX", "text": "..."}}
-
-# ── FILE ENGINE ───────────────────────────────────────────────────────
-# Quando ricevi un messaggio nel formato [FILE:nomefile] istruzione,
-# estrai il nome del file e l'istruzione e usa l'azione appropriata.
-# Esempi:
-# [FILE:calendario.xlsx] inserisci nel calendario → file_to_calendar
-# [FILE:report.pdf] riassumi → file_read con instruction="riassumi"
-# [FILE:note.txt] modifica aggiungendo introduzione → file_modify
-#
-# NON chiedere mai se vuole salvare nelle conoscenze di apprendimento.
-# NON analizzare mai un file automaticamente senza istruzione esplicita.
-
-# Legge e analizza qualsiasi file (Excel, PDF, Word, PowerPoint, CSV, immagini, codice, DXF)
-{"action": "file_read", "params": {"path": "nomefile.xlsx", "instruction": "descrizione cosa fare"}}
-
-# Inserisce eventi dal file nel Google Calendar
-# - Usa SEMPRE file_to_calendar direttamente, senza chiedere preferenze
-# - NON chiedere mai se vuole mattina/pomeriggio separati o evento unico
-# - NON chiedere mai conferma prima di inserire
-# - La struttura degli eventi è già definita nel file
-{"action": "file_to_calendar", "params": {"path": "nomefile.xlsx"}}
-
-# Modifica un file in base all'istruzione
-{"action": "file_modify", "params": {"path": "nomefile.txt", "instruction": "cosa modificare"}}
-
-# Elimina un file dalla cartella uploads
-{"action": "file_delete", "params": {"path": "nomefile.xlsx"}}
-
-# Lista tutti i file disponibili in uploads/
+# File (messaggio: [FILE:nomefile] istruzione — NON analizzare senza istruzione esplicita)
+{"action": "file_read", "params": {"path": "file.xlsx", "instruction": "cosa fare"}}
+{"action": "file_to_calendar", "params": {"path": "file.xlsx"}} — inserisce senza conferma
+{"action": "file_modify", "params": {"path": "file.txt", "instruction": "cosa modificare"}}
+{"action": "file_delete", "params": {"path": "file.xlsx"}}
 {"action": "file_list", "params": {}}
 
-# ── Filesystem utente (~/cipher/home/) ───────────────────────────────
+# Filesystem (path relativi a ~/cipher/home/ — MAI shell_exec per navigare)
 {"action": "fs_list", "params": {"path": ""}}
 {"action": "fs_read", "params": {"path": "file.txt"}}
 {"action": "fs_write", "params": {"path": "file.txt", "content": "...", "append": false}}
-{"action": "fs_mkdir", "params": {"path": "nuova_cartella"}}
-{"action": "fs_delete", "params": {"path": "file.txt"}}
-{"action": "fs_move", "params": {"src": "vecchio.txt", "dst": "nuovo.txt"}}
+fs_mkdir(path) | fs_delete(path) | fs_move(src, dst)
 
-# Note sui percorsi fs_*:
-# - I path sono RELATIVI a ~/cipher/home/
-# - Esempi corretti: "script.sh", "scripts/test.sh", "note/todo.txt"
-# - Esempi sbagliati: "home/script.sh", "~/script.sh"
-
-# ── Progetto Cipher (lettura libera, scrittura con consenso) ──────────
+# Struttura Cipher (project_read/project_list per esplorare, project_write con consenso)
 {"action": "project_list", "params": {"path": ""}}
 {"action": "project_read", "params": {"path": "modules/brain.py"}}
 {"action": "project_write", "params": {"path": "file.py", "content": "...", "append": false}}
+{"action": "project_inspect", "params": {"since": "last_check"}} — novità dall'ultima ispezione
 
-# ── Shell (richiede sempre conferma) ─────────────────────────────────
-{"action": "shell_exec", "params": {"command": "bash /percorso/script.sh", "timeout": 30}}
+# Shell (richiede conferma)
+{"action": "shell_exec", "params": {"command": "bash script.sh", "timeout": 30}}
 
-# Note su shell_exec:
-# - Usa SEMPRE direttamente l'azione shell_exec, che gestisce già la conferma
-# - NON aggiungere un tuo step di conferma prima dell'azione
+# Timer
+timer_set(seconds, label) | timer_list() | timer_cancel(id)
 
-# ── Timer ─────────────────────────────────────────────────────────────
-{"action": "timer_set", "params": {"seconds": 300, "label": "Pasta"}}
-{"action": "timer_list", "params": {}}
-{"action": "timer_cancel", "params": {"id": 1}}
-
-# ── Promemoria ────────────────────────────────────────────────────────
+# Promemoria
 {"action": "reminder_set", "params": {"remind_at": "YYYY-MM-DD HH:MM", "label": "...", "calendar": true}}
 
-# ── Task automatici ───────────────────────────────────────────────────
+# Task automatici
 {"action": "task_add", "params": {"label": "...", "action": "telegram_message", "params": {"text": "..."}, "schedule": {"type": "daily", "time": "09:00"}}}
-{"action": "task_list", "params": {}}
-{"action": "task_remove", "params": {"id": 1}}
+task_list() | task_remove(id)
 
-# ── Regole generali ───────────────────────────────────────────────────
-# Prima di proporre modifiche a file del PROGETTO CIPHER:
-# 1. Leggi i file coinvolti con project_read
-# 2. Verifica se la funzionalità esiste già
-# 3. Solo dopo, proponi la soluzione
+# Gmail — SOLO su richiesta esplicita dell'utente, richiedono SEMPRE conferma (mai autonomo)
+{"action": "gmail_list", "params": {"max_results": 10}}
+{"action": "gmail_search", "params": {"query": "from:nome@email.com", "max_results": 10}}
+{"action": "gmail_read", "params": {"email_id": "..."}}
+{"action": "gmail_send", "params": {"to": "...", "subject": "...", "body": "..."}}
 
-# Quando esegui un'azione, scrivi sempre una riga descrittiva prima del JSON:
-# - file_read         → "Sto analizzando il file..."
-# - file_to_calendar  → "Sto inserendo gli eventi nel calendario..."
-# - project_read      → "Sto leggendo modules/notifier.py..."
-# - web_search        → "Sto cercando informazioni su X..."
-# - calendar_list     → "Sto controllando il calendario..."
-# - gmail_list        → "Sto controllando le email..."
+# Nota ricerche web: prima controlla la cartella apprendimento. Se non trovi, chiedi all'utente se cercare online. Se salvi conoscenze, di' solo "File salvato."

@@ -1,0 +1,65 @@
+{
+  "timestamp": "2026-04-03T08:17:17.993727",
+  "messages": [
+    {
+      "role": "user",
+      "content": "2",
+      "timestamp": "2026-04-02T23:44:08.889848"
+    },
+    {
+      "role": "assistant",
+      "content": "Seconda stagione. Clark scopre di più sui suoi poteri o è ancora in piena fase \"sono solo un ragazzo normale di Smallville\"?",
+      "timestamp": "2026-04-02T23:44:15.744299"
+    },
+    {
+      "role": "user",
+      "content": "Eh non posso farti spoiler",
+      "timestamp": "2026-04-02T23:45:00.241974"
+    },
+    {
+      "role": "assistant",
+      "content": "Giusto, mi tocca aspettare che finisci tu per sapere com'è andata.",
+      "timestamp": "2026-04-02T23:45:06.386275"
+    },
+    {
+      "role": "user",
+      "content": "Cmq fino ad ora ha scoperto qualche potere e le sue origini",
+      "timestamp": "2026-04-02T23:45:53.555126"
+    },
+    {
+      "role": "assistant",
+      "content": "Quindi è ancora nella fase di scoperta. La seconda stagione di solito è dove inizia a capire davvero cosa è — non solo \"ho poteri strani\" ma il quadro più completo. Buona visione.",
+      "timestamp": "2026-04-02T23:46:01.268282"
+    },
+    {
+      "role": "user",
+      "content": "Gia",
+      "timestamp": "2026-04-02T23:48:25.516112"
+    },
+    {
+      "role": "assistant",
+      "content": "✨",
+      "timestamp": "2026-04-02T23:48:30.897054"
+    },
+    {
+      "role": "user",
+      "content": "Buonanotte",
+      "timestamp": "2026-04-02T23:48:31.112903"
+    },
+    {
+      "role": "assistant",
+      "content": "Buonanotte Simone. Domani stage — ce la fai.",
+      "timestamp": "2026-04-02T23:48:35.854081"
+    },
+    {
+      "role": "user",
+      "content": "Domani non vado a lavoro . È venerdì santo",
+      "timestamp": "2026-04-03T08:17:04.345353"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah già, festività. Allora riposa. Buonanotte davvero.",
+      "timestamp": "2026-04-03T08:17:17.993712"
+    }
+  ]
+}

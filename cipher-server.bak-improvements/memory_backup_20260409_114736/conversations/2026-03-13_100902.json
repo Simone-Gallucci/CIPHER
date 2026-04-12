@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-03-13T10:09:44.157411",
+  "messages": [
+    {
+      "role": "user",
+      "content": "che fai",
+      "timestamp": "2026-03-13T10:09:40.746964"
+    },
+    {
+      "role": "assistant",
+      "content": "Niente di che, Simone! Sono qui in attesa di qualcosa da fare per te. Hai bisogno di una mano con qualcosa?",
+      "timestamp": "2026-03-13T10:09:44.157400"
+    }
+  ]
+}

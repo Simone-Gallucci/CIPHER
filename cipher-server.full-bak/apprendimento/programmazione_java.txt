@@ -1,0 +1,288 @@
+# JavaScript – Conoscenza Base
+
+## Introduzione
+JavaScript è il linguaggio di programmazione del web. Gira nel browser (client-side) e sul server con Node.js. È dinamicamente tipizzato, basato su eventi e supporta la programmazione funzionale e OOP.
+
+---
+
+## Variabili
+
+```js
+var x = 10;       // vecchio, evitare (scope funzione)
+let y = 20;       // moderna, riassegnabile (scope blocco)
+const z = 30;     // costante (scope blocco)
+```
+
+---
+
+## Tipi di dati
+
+```js
+let numero = 42;
+let decimale = 3.14;
+let testo = "ciao";
+let booleano = true;
+let niente = null;
+let nonDefinito = undefined;
+let simbolo = Symbol("id");
+let grande = 9007199254740991n;  // BigInt
+
+// Tipo oggetto
+let obj = { nome: "Szymon", eta: 20 };
+let arr = [1, 2, 3];
+```
+
+---
+
+## Operatori
+
+```js
+// Aritmetici: +, -, *, /, %, **
+// Comparazione: ==, ===, !=, !==, <, >
+// Logici: &&, ||, !, ??
+// Assegnazione: =, +=, -=, *=
+// Ternario: condizione ? vero : falso
+
+// === confronta valore E tipo (preferire sempre)
+5 == "5"   // true (conversione automatica)
+5 === "5"  // false (tipi diversi)
+```
+
+---
+
+## Stringhe
+
+```js
+let s = "ciao mondo";
+s.length;                    // 10
+s.toUpperCase();             // "CIAO MONDO"
+s.includes("mondo");         // true
+s.split(" ");                // ["ciao", "mondo"]
+s.replace("mondo", "JS");   // "ciao JS"
+s.trim();                    // rimuove spazi
+
+// Template literals
+let nome = "Szymon";
+let msg = `Ciao ${nome}, hai ${20} anni!`;
+```
+
+---
+
+## Array
+
+```js
+let arr = [1, 2, 3, 4, 5];
+arr.push(6);           // aggiunge in fondo
+arr.pop();             // rimuove dall'ultimo
+arr.shift();           // rimuove il primo
+arr.unshift(0);        // aggiunge in testa
+arr.length;            // lunghezza
+arr.indexOf(3);        // indice del valore 3
+arr.includes(3);       // true/false
+arr.slice(1, 3);       // [2, 3] (non modifica)
+arr.splice(1, 2);      // rimuove 2 elementi dall'indice 1
+
+// Metodi funzionali
+arr.map(x => x * 2);
+arr.filter(x => x > 2);
+arr.reduce((acc, x) => acc + x, 0);
+arr.forEach(x => console.log(x));
+arr.find(x => x > 3);
+arr.some(x => x > 4);
+arr.every(x => x > 0);
+arr.sort((a, b) => a - b);
+```
+
+---
+
+## Oggetti
+
+```js
+const persona = {
+    nome: "Szymon",
+    eta: 20,
+    saluta() {
+        return `Ciao, sono ${this.nome}`;
+    }
+};
+
+persona.nome;           // accesso con punto
+persona["eta"];         // accesso con stringa
+Object.keys(persona);   // ["nome", "eta", "saluta"]
+Object.values(persona);
+Object.entries(persona);
+
+// Destructuring
+const { nome, eta } = persona;
+
+// Spread
+const copia = { ...persona, citta: "Roma" };
+```
+
+---
+
+## Funzioni
+
+```js
+// Dichiarazione
+function somma(a, b) { return a + b; }
+
+// Espressione
+const moltiplica = function(a, b) { return a * b; };
+
+// Arrow function
+const dividi = (a, b) => a / b;
+const quadrato = x => x * x;
+
+// Default params
+function saluta(nome = "Utente") { return `Ciao ${nome}`; }
+
+// Rest params
+function totale(...numeri) { return numeri.reduce((a, b) => a + b, 0); }
+
+// Spread in chiamata
+const nums = [1, 2, 3];
+console.log(Math.max(...nums));
+```
+
+---
+
+## Classi (ES6)
+
+```js
+class Animale {
+    constructor(nome) {
+        this.nome = nome;
+    }
+    parla() {
+        return `${this.nome} fa un suono`;
+    }
+}
+
+class Cane extends Animale {
+    parla() {
+        return `${this.nome} abbaia`;
+    }
+}
+
+const c = new Cane("Rex");
+c.parla();  // "Rex abbaia"
+```
+
+---
+
+## Asincrono
+
+### Callback
+```js
+setTimeout(() => console.log("dopo 1s"), 1000);
+```
+
+### Promise
+```js
+fetch("https://api.example.com/data")
+    .then(res => res.json())
+    .then(data => console.log(data))
+    .catch(err => console.error(err));
+```
+
+### Async/Await
+```js
+async function getData() {
+    try {
+        const res = await fetch("https://api.example.com/data");
+        const data = await res.json();
+        return data;
+    } catch (err) {
+        console.error(err);
+    }
+}
+```
+
+---
+
+## DOM (Document Object Model)
+
+```js
+// Selezione elementi
+document.getElementById("id");
+document.querySelector(".classe");
+document.querySelectorAll("p");
+
+// Modifica
+elemento.textContent = "testo";
+elemento.innerHTML = "<b>testo</b>";
+elemento.style.color = "red";
+elemento.classList.add("attivo");
+elemento.classList.remove("attivo");
+elemento.classList.toggle("attivo");
+
+// Attributi
+elemento.getAttribute("href");
+elemento.setAttribute("href", "https://...");
+
+// Creazione
+const div = document.createElement("div");
+document.body.appendChild(div);
+elemento.remove();
+```
+
+---
+
+## Eventi
+
+```js
+btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    console.log("cliccato!");
+});
+
+// Eventi comuni: click, dblclick, mouseover, keydown, keyup,
+//                submit, change, input, load, resize, scroll
+```
+
+---
+
+## Local Storage
+
+```js
+localStorage.setItem("chiave", "valore");
+localStorage.getItem("chiave");
+localStorage.removeItem("chiave");
+localStorage.clear();
+
+// Con oggetti
+localStorage.setItem("utente", JSON.stringify({ nome: "Szymon" }));
+const utente = JSON.parse(localStorage.getItem("utente"));
+```
+
+---
+
+## Moduli (ES6)
+
+```js
+// export
+export const PI = 3.14;
+export function somma(a, b) { return a + b; }
+export default class App { ... }
+
+// import
+import { PI, somma } from "./math.js";
+import App from "./App.js";
+```
+
+---
+
+## Utili da sapere
+
+```js
+typeof x;              // tipo di x
+Array.isArray(arr);    // true se è array
+JSON.stringify(obj);   // oggetto -> stringa JSON
+JSON.parse(str);       // stringa JSON -> oggetto
+console.log / warn / error / table
+Math.random();         // 0-1
+Math.floor / ceil / round
+parseInt("42");        // stringa -> intero
+parseFloat("3.14");    // stringa -> decimale
+```

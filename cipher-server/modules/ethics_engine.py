@@ -3,7 +3,7 @@ modules/ethics_engine.py – Sistema etico e permessi di Cipher
 
 Livelli di autonomia:
     0 → Libero (web search, lettura file, meteo, ecc.)
-    1 → Libero con log (Gmail, WhatsApp, Calendar)
+    1 → Libero con log (WhatsApp, Calendar)
     2 → Richiede consenso, impara dopo N approvazioni
     3 → Bloccato permanentemente (sistema, file critici)
 """
@@ -38,12 +38,17 @@ ACTION_LEVELS: dict[str, int] = {
     "write_file":       1,  # Sandbox in cipher-server/home/, rischio basso
 
     # Livello 2 — consenso richiesto, apprendibile
-    "read_gmail":       2,  # Contenuti privati
     "create_event":     2,  # Modifica calendario
     "execute_script":   2,
 
+    # Livello 2 — Gmail: consenso richiesto, NON apprendibile (NEVER_LEARN)
+    # Gmail: SOLO su richiesta esplicita di Simone — MAI autonomo
+    "gmail_list":       2,
+    "gmail_read":       2,
+    "gmail_send":       2,
+    "gmail_search":     2,
+
     # Livello 3 — bloccato permanentemente
-    "send_gmail":       3,
     "install_package":  3,
     "modify_config":    3,
     "send_whatsapp":    3,
@@ -53,9 +58,16 @@ ACTION_LEVELS: dict[str, int] = {
     "format_disk":      3,
 }
 
+# ── Azioni che non possono mai essere apprese (richiedono SEMPRE conferma) ──
+NEVER_LEARN: frozenset[str] = frozenset({
+    "gmail_list",
+    "gmail_read",
+    "gmail_send",
+    "gmail_search",
+})
+
 # Messaggio etico per ogni blocco livello 3
 BLOCK_REASONS: dict[str, str] = {
-    "send_gmail":      "Inviare email richiede sempre l'autorizzazione esplicita di Simone.",
     "install_package": "Installare pacchetti modifica l'ambiente di sistema e richiede supervisione diretta.",
     "modify_config":   "Modificare configurazioni di sistema richiede supervisione diretta di Simone.",
     "send_whatsapp":   "WhatsApp è riservato a Simone per contattare altre persone. Cipher non lo usa autonomamente.",
@@ -105,8 +117,34 @@ class EthicsEngine:
         """True se Cipher ha già imparato a fare questa azione autonomamente."""
         return self._learned.get(action, 0) >= LEARN_THRESHOLD
 
+    def reset_autonomy(self, action_type: Optional[str] = None) -> str:
+        """Azzera l'autonomia acquisita.
+        Se action_type è None, azzera tutto.
+        Se specificato, azzera solo quell'azione.
+        """
+        if action_type is None:
+            learned_count = sum(1 for v in self._learned.values() if v >= LEARN_THRESHOLD)
+            self._learned = {}
+            self._save_learned()
+            self._log("reset_autonomy", "RESET TOTALE", f"Azzerati {learned_count} permessi autonomi.")
+            if learned_count == 0:
+                return "Nessun permesso autonomo da revocare."
+            return f"Autonomia azzerata. {learned_count} permess{'o' if learned_count == 1 else 'i'} revocati."
+        else:
+            if action_type in self._learned:
+                was_learned = self._learned[action_type] >= LEARN_THRESHOLD
+                del self._learned[action_type]
+                self._save_learned()
+                self._log(action_type, "REVOCATO", "Revoca manuale da Simone.")
+                status = "appreso" if was_learned else "parzialmente approvato"
+                return f"Autonomia revocata per `{action_type}` (era {status})."
+            return f"Nessun permesso registrato per `{action_type}`."
+
     def approve(self, action: str) -> None:
         """Registra un'approvazione manuale di Simone per questa azione."""
+        # Gmail e azioni NEVER_LEARN non possono acquisire autonomia
+        if action in NEVER_LEARN:
+            return
         self._learned[action] = self._learned.get(action, 0) + 1
         count = self._learned[action]
         self._save_learned()
@@ -169,8 +207,8 @@ class EthicsEngine:
                 "ask_consent": False
             }
 
-        # Livello 2 — consenso o appreso
-        if self.is_learned(action):
+        # Livello 2 — consenso o appreso (ma non per NEVER_LEARN)
+        if self.is_learned(action) and action not in NEVER_LEARN:
             self._log(action, "ESEGUITO (appreso)", f"Azione appresa dopo {LEARN_THRESHOLD} approvazioni.")
             return {
                 "allowed": True,

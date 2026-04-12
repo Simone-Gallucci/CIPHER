@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-04-04T11:17:47.063977",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Mh in effetti",
+      "timestamp": "2026-04-04T11:16:20.575995"
+    },
+    {
+      "role": "assistant",
+      "content": "A cosa stai pensando?",
+      "timestamp": "2026-04-04T11:16:21.907231"
+    },
+    {
+      "role": "user",
+      "content": "A quello che hai detto",
+      "timestamp": "2026-04-04T11:17:27.902935"
+    },
+    {
+      "role": "assistant",
+      "content": "Cosa ti ha colpito in particolare?",
+      "timestamp": "2026-04-04T11:17:29.739880"
+    },
+    {
+      "role": "user",
+      "content": "Le tue idee",
+      "timestamp": "2026-04-04T11:17:42.682919"
+    },
+    {
+      "role": "assistant",
+      "content": "Quali nello specifico? Ne ho buttate fuori un po' stamattina.",
+      "timestamp": "2026-04-04T11:17:47.063958"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-04-03T17:45:02.342773",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Ma ho problemi con le api Key, niente di così problematico",
+      "timestamp": "2026-04-03T17:44:41.446369"
+    },
+    {
+      "role": "assistant",
+      "content": "Ah, ok. Che tipo di problema — chiave scaduta, quota esaurita, o errore di configurazione?",
+      "timestamp": "2026-04-03T17:44:44.676903"
+    },
+    {
+      "role": "user",
+      "content": "Non regge il limit rate",
+      "timestamp": "2026-04-03T17:45:02.342766"
+    }
+  ]
+}

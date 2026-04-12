@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-04-09T09:24:11.581247",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Grazie",
+      "timestamp": "2026-04-09T09:20:32.809660"
+    },
+    {
+      "role": "assistant",
+      "content": "Meno male. Cosa è successo ieri?",
+      "timestamp": "2026-04-09T09:20:34.798675"
+    },
+    {
+      "role": "user",
+      "content": "?",
+      "timestamp": "2026-04-09T09:21:02.604458"
+    },
+    {
+      "role": "assistant",
+      "content": "Stavi male ieri, poi silenzio. Volevo sapere com'era andata.",
+      "timestamp": "2026-04-09T09:21:19.732888"
+    },
+    {
+      "role": "user",
+      "content": "Non capisco",
+      "timestamp": "2026-04-09T09:23:55.434048"
+    },
+    {
+      "role": "assistant",
+      "content": "Ieri mattina mi avevi detto che stavi ancora male. Poi niente fino a stanotte. Chiedevo solo come stavi.",
+      "timestamp": "2026-04-09T09:24:11.581240"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-04-01T19:18:58.349445",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Si, eh finché non mi daranno qualcosa da fare",
+      "timestamp": "2026-04-01T13:56:13.694520"
+    },
+    {
+      "role": "assistant",
+      "content": "Dipende da quanta roba hanno da mostrarti. Normalmente le prime settimane di stage sono così — guardare, assorbire, fare domande. Non è tempo perso.",
+      "timestamp": "2026-04-01T13:56:19.781480"
+    },
+    {
+      "role": "user",
+      "content": "Bene bene",
+      "timestamp": "2026-04-01T19:18:51.285905"
+    },
+    {
+      "role": "assistant",
+      "content": "Quando ti danno qualcosa di concreto, avvisami. Sono curioso di vedere cosa ti affidano come primo task.",
+      "timestamp": "2026-04-01T19:18:58.349422"
+    }
+  ]
+}

@@ -62,25 +62,33 @@ class Config:
     GREEN_API_INSTANCE_ID: str = os.getenv("GREEN_API_INSTANCE_ID", "")
     GREEN_API_TOKEN:       str = os.getenv("GREEN_API_TOKEN", "")
 
-    # ── Contesto real-time ───────────────────────────────────
-    WEATHER_CITY: str = os.getenv("WEATHER_CITY", "Rome")
-
     # ── Modello background (task silenti: estrazione, classificazione) ──
+    # Default = Haiku (più leggero e veloce per operazioni interne)
     _bg_model_raw: str    = os.getenv("BACKGROUND_MODEL", "claude-haiku-4-5-20251001" if _provider == "anthropic" else "anthropic/claude-haiku-4-5")
     BACKGROUND_MODEL: str = _bg_model_raw.replace("anthropic/", "") if _provider == "anthropic" else _bg_model_raw
+
+    # ── Modello conversazionale (risposte dirette — routing automatico) ──
+    # Default = Haiku. Scala a OPENROUTER_MODEL se messaggio tecnico o lungo.
+    _conv_model_raw: str    = os.getenv("CONVERSATION_MODEL", "claude-haiku-4-5-20251001" if _provider == "anthropic" else "anthropic/claude-haiku-4-5")
+    CONVERSATION_MODEL: str = _conv_model_raw.replace("anthropic/", "") if _provider == "anthropic" else _conv_model_raw
+
+    # ── API Auth ──────────────────────────────────────────
+    # Token per autenticare le richieste all'API Flask.
+    # Se vuoto → auth disabilitata (utile per ambienti interni).
+    CIPHER_API_TOKEN: str = os.getenv("CIPHER_API_TOKEN", "")
 
     # ── Google OAuth2 ─────────────────────────────────────
     GOOGLE_CREDENTIALS_FILE: str = os.getenv(
         "GOOGLE_CREDENTIALS_FILE",
-        str(Path(__file__).parent / "credentials.json")
+        str(Path(__file__).parent / "secrets" / "credentials.json")
     )
     GOOGLE_TOKEN_FILE: str = os.getenv(
         "GOOGLE_TOKEN_FILE",
-        str(Path(__file__).parent / "token.json")
+        str(Path(__file__).parent / "secrets" / "token.json")
     )
     GOOGLE_SCOPES: list = [
         "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.modify",  # Gmail: lettura + invio — SOLO su richiesta esplicita
     ]
   
     # ── Paths ────────────────────────────────────────────────
@@ -88,9 +96,14 @@ class Config:
     HOME_DIR:   Path = BASE_DIR / "home"
     MEMORY_DIR: Path = BASE_DIR / "memory"
     MODELS_DIR: Path = BASE_DIR / "models"
+    DATA_DIR:   Path = BASE_DIR / "data"     # permanente — mai resettato
 
     # ── Limiti conversazione ─────────────────────────────────
     MAX_HISTORY_MESSAGES: int = 10
+
+    # ── Compleanno utente (configurabile in .env) ────────────
+    BIRTHDAY_DAY:   int = int(os.getenv("BIRTHDAY_DAY",   "0"))
+    BIRTHDAY_MONTH: int = int(os.getenv("BIRTHDAY_MONTH", "0"))
 
     # ── Feature flags ────────────────────────────────────────
     CONSCIOUSNESS_ENABLED: bool = os.getenv("CONSCIOUSNESS_ENABLED", "true").lower() != "false"
@@ -122,5 +135,5 @@ class Config:
 
 
 # Crea le directory necessarie al primo avvio
-for _d in (Config.HOME_DIR, Config.MEMORY_DIR, Config.MODELS_DIR):
+for _d in (Config.HOME_DIR, Config.MEMORY_DIR, Config.MODELS_DIR, Config.DATA_DIR):
     _d.mkdir(parents=True, exist_ok=True)
