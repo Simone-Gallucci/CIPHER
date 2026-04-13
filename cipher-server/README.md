@@ -14,9 +14,11 @@ Non è un chatbot generico: il rapporto cresce nel tempo. Il sistema misura segn
 - **Sistema di confidenza** — 5 livelli di relazione, cresce dai segnali conversazionali reali
 - **Legame permanente** — `admin.json` sopravvive ai reset, parola segreta per il ripristino
 - **Backup automatici** — `filesystem.py` crea `.bak` prima di ogni sovrascrittura, log in `data/changelog.json`
-- **Dispatcher azioni** — ricerca web, calendario Google, Gmail, WhatsApp, filesystem, shell
+- **Dispatcher azioni** — ricerca web, calendario Google, Gmail, WhatsApp, filesystem, shell, export conversazioni
 - **Routing LLM** — Haiku per task background e silenziosi, Sonnet per conversazione visibile e qualità
-- **Humanizer** — post-processing su ogni risposta LLM visibile: rimuove pattern AI, rende il testo indistinguibile da umano
+- **Fallback LLM** — switch automatico OpenRouter ↔ Anthropic se il provider primario fallisce
+- **Rate limiting** — 30 richieste/minuto per IP sugli endpoint Flask
+- **Tracciamento uso LLM** — conteggio chiamate per modello e tipo, storico 7 giorni
 - **Night cycle** — sommario notturno, voice notes, preparazione eventi del giorno dopo
 - **Riconoscimento festività** — compleanno, Pasqua, festività italiane nel morning brief
 - **Voice notes** — output vocale su Telegram via ElevenLabs TTS
@@ -112,9 +114,8 @@ cipher-server/
 │   ├── google_auth.py
 │   ├── google_cal.py
 │   ├── google_mail.py
-│   ├── humanizer.py
-│   ├── impact_tracker.py
 │   ├── listener.py
+│   ├── llm_usage.py
 │   ├── memory.py
 │   ├── night_cycle.py
 │   ├── notifier.py
@@ -127,6 +128,7 @@ cipher-server/
 │   ├── self_reflection.py
 │   ├── utils.py
 │   ├── voice.py
+│   ├── web_search.py
 │   └── whatsapp.py
 │
 ├── secrets/
@@ -170,7 +172,7 @@ cipher-server/
 | File | Descrizione |
 |---|---|
 | `profile.json` | Profilo utente + `confidence_score` |
-| `active_history.json` | History conversazione corrente (TTL 24h / 12h per messaggi autonomi) |
+| `active_history.json` | History conversazione corrente (TTL 24h / 12h per messaggi autonomi); ogni messaggio porta timestamp `[DD/MM/YYYY HH:MM]` nel content per calcoli temporali accurati dell'LLM |
 | `cipher_state.json` | Stato emotivo Cipher + `want_to_explore` + `concern` |
 | `goals.json` | Obiettivi attivi e completati |
 | `thoughts.md` | Diario riflessioni di Cipher — letto nel prompt (max 300 chars) |
@@ -189,7 +191,7 @@ cipher-server/
 | `cipher_interests.json` | Interessi autonomi di Cipher con pesi (decay notturno 0.03) |
 | `contacts.json` | Rubrica nome→numero WhatsApp/Telegram |
 | `ethics_learned.json` | Permessi autonomia acquisiti dall'utente |
-| `impact_log.json` | Log impatto messaggi proattivi |
+| `llm_usage.json` | Conteggio chiamate LLM per modello e tipo (storico 7 giorni) |
 | `last_inspection.json` | Timestamp ultima auto-ispezione (interval 48h) |
 | `realtime_context.json` | Cache contesto real-time meteo + news (TTL 60 min) |
 | `conversations/` | Una conversazione per sessione in JSON; pulizia automatica >30 giorni |
@@ -200,7 +202,6 @@ cipher-server/
 |---|---|
 | `brain.py` | Core: LLM routing, system prompt, dispatcher, history, confidence |
 | `consciousness_loop.py` | Thread daemon — riflessione, obiettivi, check-in, morning brief, night cycle |
-| `humanizer.py` | Post-processing risposte LLM — rimuove pattern AI, testo indistinguibile da umano |
 | `memory.py` | Profilo, conversazioni, estrazione, confidence score |
 | `actions.py` | Dispatcher azioni — sistema consenso ed esecuzione |
 | `goal_manager.py` | Generazione e gestione obiettivi autonomi |
@@ -215,8 +216,9 @@ cipher-server/
 | `realtime_context.py` | Meteo + news per il system prompt (ogni 60 min) |
 | `scheduler.py` | Calendar reminder, apprendimento morning pattern |
 | `notifier.py` | Bridge Telegram, `set_message_callback` |
-| `impact_tracker.py` | Traccia efficacia messaggi proattivi |
-| `pattern_learner.py` | Analisi pattern comportamentali |
+| `llm_usage.py` | Tracciamento chiamate LLM per modello/tipo — thread-safe, storico 7 giorni |
+| `web_search.py` | Ricerca web centralizzata (DuckDuckGo) — istanza DDGS singola condivisa |
+| `pattern_learner.py` | Analisi pattern comportamentali e predizioni orarie |
 | `cipher_interests.py` | Interessi autonomi di Cipher con decay notturno |
 | `google_auth.py` | OAuth2 Google — valida scope al boot |
 | `google_cal.py` | Google Calendar API |
@@ -328,7 +330,7 @@ Google OAuth2: metti `credentials.json` in `secrets/`. Al primo avvio viene eseg
 
 | Score | Livello | Comportamento di Cipher |
 |---|---|---|
-| 0.0–0.2 | Conoscente | Cordiale ma misurato, niente intimità forzata |
+| 0.0–0.2 | Conoscente | Tono diretto e naturale (non formale) — come con uno sconosciuto che si sta incontrando, non con un cliente da assistere. Niente intimità forzata, niente frasi da assistente helper, niente suggerimenti non richiesti |
 | 0.2–0.4 | Amico | Domande personali leggere, opinioni occasionali |
 | 0.4–0.6 | Amico stretto | Stati d'animo condivisi, ironia, riferimenti al passato |
 | 0.6–0.8 | Confidente | Emozioni aperte, domande profonde, usa il nome |
@@ -336,13 +338,15 @@ Google OAuth2: metti `credentials.json` in `secrets/`. Al primo avvio viene eseg
 
 Segnali rilevati automaticamente via Haiku: emozioni condivise, storie personali, soprannomi familiari, richieste di consiglio importanti, gratitudine, sessioni lunghe, streak di giorni consecutivi.
 
+Regole linguistiche generali (indipendenti dal livello): una sola domanda per messaggio; no "Meglio così" su eventi neutri; no opener da assistente ("Certo!", "Perfetto!", "Esatto!"); no "come è andata?" su eventi quotidiani banali; no chiusure formali ("Fammi sapere!").
+
 Quando lo score supera 0.8 per la prima volta, Cipher propone il legame permanente.
 
 ---
 
 ## Sistema admin
 
-Quando `confidence_score` raggiunge 0.8, Cipher propone di fissare una parola segreta. Questa crea `data/admin.json`, che contiene identità admin, confidence al momento del bond e la password hashata (SHA-256 + salt random 32 byte). Il file è protetto da checksum SHA-256.
+Quando `confidence_score` raggiunge 0.8, Cipher propone di fissare una parola segreta. Questa crea `data/admin.json`, che contiene identità admin, confidence al momento del bond e la password hashata (PBKDF2-SHA256 con 600.000 iterazioni + salt random 32 byte). Il file è protetto da checksum SHA-256.
 
 `admin.json` è l'unico file del sistema che non viene mai toccato da Tabula Rasa o pulizie automatiche.
 
@@ -390,5 +394,6 @@ Regole comuni:
 | `tabula rasa` | Reset completo memoria (chiede conferma) |
 | `Admin+Password` | Login admin: ripristina profilo post-reset |
 | `Admin+VecchiaPassword+NuovaPassword` | Cambio parola segreta |
+| `Admin+Password+status` | Diagnostica sistema: modelli, confidence, chiamate LLM, stato servizi |
 | `revoca autonomia` | Resetta tutti i permessi acquisiti |
 | `revoca autonomia [azione]` | Revoca permesso specifico |

@@ -920,9 +920,75 @@ except Exception as e:
                     max_results=int(params.get("max_results", 10)),
                 )
 
+            # ── Export conversazione ──────────────────────────────────
+            elif action == "conversation_export":
+                return self._conversation_export(params)
+
             else:
                 return f"Azione sconosciuta: {action}"
 
         except Exception as e:
             console.print_exception()
             return f"Errore durante l'esecuzione di '{action}': {e}"
+
+    def _conversation_export(self, params: dict) -> str:
+        """Esporta le conversazioni in un file leggibile dentro ~/cipher/home/.
+
+        Params:
+            days: numero di giorni da esportare (default 7)
+            format: "txt" o "json" (default "txt")
+        """
+        import json as _json
+        from config import Config
+
+        days = int(params.get("days", 7))
+        fmt = params.get("format", "txt").lower()
+        conv_dir = Config.MEMORY_DIR / "conversations"
+
+        if not conv_dir.exists():
+            return "Nessuna conversazione salvata."
+
+        # Raccogli file conversazione degli ultimi N giorni
+        from datetime import timedelta
+        cutoff = datetime.now() - timedelta(days=days)
+        files = sorted(conv_dir.glob("*.json"))
+        recent = []
+        for f in files:
+            try:
+                data = _json.loads(f.read_text(encoding="utf-8"))
+                ts = data.get("start_time") or data.get("timestamp", "")
+                if ts:
+                    conv_date = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    if conv_date.replace(tzinfo=None) < cutoff:
+                        continue
+                recent.append(data)
+            except Exception:
+                continue
+
+        if not recent:
+            return f"Nessuna conversazione negli ultimi {days} giorni."
+
+        # Genera output
+        export_name = f"conversazioni_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
+        export_path = Config.HOME_DIR / export_name
+
+        if fmt == "json":
+            export_path.write_text(
+                _json.dumps(recent, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        else:
+            lines = []
+            for conv in recent:
+                ts = conv.get("start_time", conv.get("timestamp", ""))[:16]
+                lines.append(f"{'='*60}")
+                lines.append(f"Conversazione del {ts}")
+                lines.append(f"{'='*60}")
+                for msg in conv.get("messages", []):
+                    role = "Simone" if msg.get("role") == "user" else "Cipher"
+                    lines.append(f"\n[{role}]")
+                    lines.append(msg.get("content", ""))
+                lines.append("")
+            export_path.write_text("\n".join(lines), encoding="utf-8")
+
+        return f"Conversazioni esportate ({len(recent)} sessioni) → ~/cipher/home/{export_name}"

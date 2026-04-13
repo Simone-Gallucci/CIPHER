@@ -5,6 +5,8 @@ server.py – Cipher API Server
 import os
 import subprocess
 import tempfile
+import time as _time
+from collections import defaultdict
 
 from flask import Flask, request, jsonify
 from rich.console import Console
@@ -16,6 +18,11 @@ from modules.voice import Voice
 
 # ── Endpoint pubblici (non richiedono auth) ───────────────────────────────
 _PUBLIC_PATHS = {"/health"}
+
+# ── Rate limiting ─────────────────────────────────────────────────────────
+_RATE_LIMIT_WINDOW = 60   # secondi
+_RATE_LIMIT_MAX    = 30   # max richieste per finestra
+_rate_log: dict[str, list[float]] = defaultdict(list)
 
 console = Console()
 app     = Flask(__name__)
@@ -40,6 +47,13 @@ def check_auth():
     token = request.headers.get("X-Cipher-Token", "")
     if token != Config.CIPHER_API_TOKEN:
         return jsonify({"error": "Unauthorized"}), 401
+    # Rate limiting per IP
+    ip = request.remote_addr or "unknown"
+    now = _time.time()
+    _rate_log[ip] = [t for t in _rate_log[ip] if now - t < _RATE_LIMIT_WINDOW]
+    if len(_rate_log[ip]) >= _RATE_LIMIT_MAX:
+        return jsonify({"error": "Rate limit exceeded"}), 429
+    _rate_log[ip].append(now)
 
 
 def init_brain():
@@ -140,12 +154,30 @@ def convert_to_pcm(audio_bytes: bytes, content_type: str = "") -> bytes:
 
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "model": Config.OPENROUTER_MODEL})
+    from modules import llm_usage
+    from modules.admin_manager import admin_exists
+    profile_file = Config.MEMORY_DIR / "profile.json"
+    confidence = 0.0
+    if profile_file.exists():
+        try:
+            import json
+            profile = json.loads(profile_file.read_text(encoding="utf-8"))
+            confidence = profile.get("confidence_score", 0.0)
+        except Exception:
+            pass
+    return jsonify({
+        "status": "ok",
+        "model": Config.OPENROUTER_MODEL,
+        "background_model": Config.BACKGROUND_MODEL,
+        "consciousness": consciousness is not None and consciousness._running,
+        "admin_bound": admin_exists(),
+        "confidence": confidence,
+        "llm_calls_today": llm_usage.get_today(),
+    })
 
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    import time as _time
     data       = request.get_json(silent=True) or {}
     message    = data.get("message", "").strip()
     image_b64  = data.get("image_b64")

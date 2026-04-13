@@ -19,14 +19,12 @@ from rich.console import Console
 
 from config import Config
 from modules.ethics_engine import EthicsEngine
-from modules.humanizer import Humanizer
 from modules.utils import strip_action_json
 from modules.self_reflection import SelfReflection
 from modules.goal_manager import GoalManager
 from modules.script_registry import ScriptRegistry
 from modules.episodic_memory import EpisodicMemory
 from modules.cipher_interests import CipherInterests
-from modules.impact_tracker import ImpactTracker
 from modules.pattern_learner import PatternLearner
 from modules.passive_monitor import PassiveMonitor
 from modules.night_cycle import NightCycle
@@ -237,14 +235,11 @@ class ConsciousnessLoop:
         self._brain      = brain
         self._voice      = voice
         self._ethics     = EthicsEngine()
-        self._humanizer  = Humanizer()
-
         # ── Nuovi moduli ──────────────────────────────────────────────
         self._episodic       = EpisodicMemory()
         self._interests      = CipherInterests()
-        self._impact_tracker = ImpactTracker()
         self._patterns       = PatternLearner(brain=brain)
-        self._discretion     = DiscretionEngine(impact_tracker=self._impact_tracker)
+        self._discretion     = DiscretionEngine()
         self._realtime       = RealtimeContext(cipher_interests=self._interests)
 
         # SelfReflection e GoalManager ricevono i nuovi moduli
@@ -276,7 +271,6 @@ class ConsciousnessLoop:
             brain=brain,
             notify_fn=self._notify,
             interests=self._interests,
-            impact_tracker=self._impact_tracker,
             discretion=self._discretion,
         )
         self._night_cycle = NightCycle(
@@ -285,12 +279,10 @@ class ConsciousnessLoop:
             pattern_learner=self._patterns,
             cipher_interests=self._interests,
             notify_fn=self._notify,
-            impact_tracker=self._impact_tracker,
         )
 
         # Collega i moduli al Brain se disponibile
         if brain:
-            brain._impact_tracker  = self._impact_tracker
             brain._pattern_learner = self._patterns
             brain._episodic_memory = self._episodic
 
@@ -329,9 +321,6 @@ class ConsciousnessLoop:
         self._proactive_pending = False
         self._last_user_interaction = time.time()
         now = datetime.now()
-        # Aggiorna PatternLearner con l'orario dell'interazione
-        if self._patterns:
-            self._patterns.record_interaction(now.hour, now.weekday(), "interazione")
         # Impara orario mattutino di risposta
         if 6 <= now.hour < 11:
             self._record_morning_response(now)
@@ -381,9 +370,7 @@ class ConsciousnessLoop:
             # 1b. Proattivo ignorato da > 90 minuti → marca come neutral
             if (self._proactive_pending
                     and self._proactive_sent_at > 0
-                    and now - self._proactive_sent_at > 5400
-                    and self._impact_tracker):
-                self._impact_tracker.mark_ignored()
+                    and now - self._proactive_sent_at > 5400):
                 self._proactive_pending = False
                 console.print("[dim]🔇 Proattivo marcato come ignorato (90 min senza risposta)[/dim]")
 
@@ -622,22 +609,11 @@ class ConsciousnessLoop:
             console.print("[dim]🔇 Check-in scartato: argomento già trattato[/dim]")
             return
 
-        # Aggiunge domanda di feedback esplicito se pertinente (max 1 volta/giorno)
-        if self._impact_tracker:
-            feedback_preview = self._impact_tracker.should_ask_explicit_feedback()
-            if feedback_preview:
-                message += " A proposito — ti è stato utile quello che ti ho mandato prima?"
-
         if self._discretion:
             self._discretion.record_sent("checkin", message)
 
         self._record_checkin_sent(message, checkin_keywords)
         self._checkin_sent = True
-        if self._impact_tracker:
-            self._impact_tracker.log_action(
-                "checkin", message,
-                context=f"inattività: {minutes} min, stato: {self._reflection.emotional_state}"
-            )
         self._notify(message)
         self._last_checkin = time.time()
 
@@ -849,11 +825,6 @@ class ConsciousnessLoop:
             self._discretion.record_sent("calendar_reminder", response)
 
         console.print("[dim]📅 Cipher: notifica calendario proattiva[/dim]")
-        if self._impact_tracker:
-            self._impact_tracker.log_action(
-                "calendar_reminder", response,
-                context=f"eventi: {events_text[:100]}"
-            )
         self._notify(response)
 
     # ── Brief adattivo — impara orario mattutino ─────────────────────
@@ -1316,11 +1287,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                         emotional_state=self._reflection.emotional_state,
                     )
                 if result.get("notify"):
-                    if self._impact_tracker:
-                        self._impact_tracker.log_action(
-                            "goal_result", result["output"],
-                            context=f"obiettivo: {title}"
-                        )
                     self._notify(result["output"])
             else:
                 self._goals.fail_goal(goal_id, reason=result.get("error", "Errore sconosciuto"))
@@ -1426,11 +1392,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                 return {"success": False, "error": f"Soppresso dalla discrezionalità: {reason}"}
             self._discretion.record_sent("proactive_message", message)
 
-        if self._impact_tracker:
-            self._impact_tracker.log_action(
-                "proactive_message", message,
-                context=f"obiettivo: {goal.get('title', '')}"
-            )
         self._notify(message)
         return {"success": True, "output": "Messaggio Telegram inviato.", "notify": False}
 
@@ -1484,12 +1445,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                 console.print(f"[dim]🔇 Contact soppresso: {reason}[/dim]")
                 return {"success": False, "error": f"Soppresso: {reason}"}
             self._discretion.record_sent("proactive_message", message)
-
-        if self._impact_tracker:
-            self._impact_tracker.log_action(
-                "contact_goal", message,
-                context=f"obiettivo: {intent}, confidence: {confidence:.2f}"
-            )
 
         console.print(f"[dim]💬 Contact goal eseguito: '{intent}'[/dim]")
         self._notify(message)
@@ -1763,10 +1718,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
 
     def _notify(self, message: str) -> None:
         """Invia notifica via Telegram e aggiunge alla history del Brain."""
-        # Humanizer — non applicare su SKIP o payload JSON
-        _msg = message.strip()
-        if _msg and not _msg.upper().startswith("SKIP") and not _msg.startswith("{"):
-            message = self._humanizer.process(message)
         _send_telegram(message)
         self._proactive_pending = True
         self._proactive_sent_at = time.time()

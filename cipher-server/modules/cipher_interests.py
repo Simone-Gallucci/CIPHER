@@ -89,12 +89,27 @@ class CipherInterests:
 
     def decay(self, amount: float = 0.03):
         """
-        Riduce leggermente gli interessi non innati nel tempo.
+        Riduce gli interessi non innati proporzionalmente all'inattività.
+        Interessi condivisi (shared) decadono a metà velocità.
+        Interessi esplorati di recente (<3 giorni) non decadono.
         Da chiamare periodicamente (es. nel ciclo notturno).
         """
+        now = datetime.now()
         for interest in self._interests:
-            if interest.get("source") != "innato":
-                interest["intensity"] = max(0.1, interest["intensity"] - amount)
+            if interest.get("source") == "innato":
+                continue
+            # Controlla se esplorato di recente
+            last_explored = interest.get("last_explored")
+            if last_explored:
+                try:
+                    days_since = (now - datetime.fromisoformat(last_explored)).days
+                    if days_since < 3:
+                        continue  # esplorato di recente, niente decay
+                except (ValueError, TypeError):
+                    pass
+            # Interessi condivisi decadono a metà velocità
+            effective_decay = amount * 0.5 if interest.get("shared") else amount
+            interest["intensity"] = max(0.1, interest["intensity"] - effective_decay)
         # Rimuovi interessi troppo deboli (non innati)
         self._interests = [
             i for i in self._interests

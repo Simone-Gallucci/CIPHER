@@ -96,13 +96,55 @@ class EpisodicMemory:
             if tag_lower in [t.lower() for t in e.get("tags", [])]
         ]
 
-    def build_context(self, n: int = 6) -> str:
-        """Costruisce un blocco di testo con gli N episodi più recenti per il system prompt."""
+    def recall_relevant(self, query: str, n: int = 3) -> list[dict]:
+        """Cerca episodi rilevanti per la query, ordinati per rilevanza.
+
+        Usa ricerca keyword su content e tags. Score = numero di keyword matchate
+        + bonus per match esatto nei tag.
+        """
+        if not query or not self._episodes:
+            return []
+
+        keywords = [w.lower() for w in query.split() if len(w) > 2]
+        if not keywords:
+            return []
+
+        scored: list[tuple[float, dict]] = []
+        for ep in self._episodes:
+            content_lower = ep.get("content", "").lower()
+            tags_lower = [t.lower() for t in ep.get("tags", [])]
+            score = 0.0
+            for kw in keywords:
+                if kw in content_lower:
+                    score += 1.0
+                if any(kw in tag for tag in tags_lower):
+                    score += 1.5  # tag match vale di più
+            if score > 0:
+                scored.append((score, ep))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [ep for _, ep in scored[:n]]
+
+    def build_context(self, n: int = 6, query: str = "") -> str:
+        """Costruisce un blocco di testo per il system prompt.
+
+        Se query è fornita, include episodi rilevanti oltre ai più recenti.
+        """
         recent = self.get_recent(n)
-        if not recent:
+        episodes = list(recent)
+
+        if query:
+            relevant = self.recall_relevant(query, n=3)
+            seen_ids = {e.get("id") for e in episodes}
+            for ep in relevant:
+                if ep.get("id") not in seen_ids:
+                    episodes.append(ep)
+                    seen_ids.add(ep.get("id"))
+
+        if not episodes:
             return ""
         lines = ["## Episodi recenti ricordati da Cipher:"]
-        for ep in recent:
+        for ep in episodes:
             dt = ep["timestamp"][:16].replace("T", " ")
             lines.append(f"- [{dt}] ({ep['type']}) {ep['content']}")
         return "\n".join(lines)

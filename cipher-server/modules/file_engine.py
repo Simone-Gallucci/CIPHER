@@ -392,21 +392,42 @@ class FileEngine:
     def _resolve_path(self, path: str) -> Path:
         """
         Risolve il path del file.
-        Se è relativo, cerca prima in uploads/, poi nel filesystem del Pi.
+        Se è relativo, cerca prima in uploads/, poi nella home di Cipher.
+        Tutti i path vengono validati: devono risiedere dentro UPLOADS_DIR,
+        Config.HOME_DIR o Config.BASE_DIR per prevenire path traversal.
         """
+        _ALLOWED_ROOTS = [
+            UPLOADS_DIR.resolve(),
+            Config.HOME_DIR.resolve(),
+            Config.BASE_DIR.resolve(),
+        ]
+
         p = Path(path)
         if p.is_absolute():
-            return p
+            resolved = p.resolve()
+            if any(self._is_subpath(resolved, root) for root in _ALLOWED_ROOTS):
+                return resolved
+            return UPLOADS_DIR / p.name  # fallback sicuro: solo il filename
+
         # Cerca in uploads/
         upload_path = UPLOADS_DIR / path
         if upload_path.exists():
             return upload_path
         # Cerca relativo alla home di cipher
         cipher_path = Config.BASE_DIR / path
-        if cipher_path.exists():
+        if cipher_path.exists() and self._is_subpath(cipher_path.resolve(), Config.BASE_DIR.resolve()):
             return cipher_path
-        # Path assoluto come ultimo tentativo
+        # Fallback: uploads/
         return UPLOADS_DIR / path
+
+    @staticmethod
+    def _is_subpath(path: Path, root: Path) -> bool:
+        """Verifica che path sia contenuto in root (previene traversal via symlink)."""
+        try:
+            path.resolve().relative_to(root.resolve())
+            return True
+        except ValueError:
+            return False
 
     def _suggest_package(self, ext: str) -> str:
         mapping = {

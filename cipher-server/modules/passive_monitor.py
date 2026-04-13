@@ -32,13 +32,11 @@ class PassiveMonitor:
         brain=None,
         notify_fn: Optional[Callable[[str], None]] = None,
         interests=None,        # CipherInterests instance
-        impact_tracker=None,   # ImpactTracker instance
         discretion=None,       # DiscretionEngine instance
     ):
         self._brain          = brain
         self._notify         = notify_fn
         self._interests      = interests
-        self._impact_tracker = impact_tracker
         self._discretion     = discretion
 
         self._running        = False
@@ -159,7 +157,5 @@ class PassiveMonitor:
                 return
             self._discretion.record_sent(action_type, message)
 
-        if self._impact_tracker:
-            self._impact_tracker.log_action(action_type, message, context)
         if self._notify:
             self._notify(message)

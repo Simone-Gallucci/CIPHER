@@ -6,9 +6,8 @@ questo motore decide: farlo adesso? aspettare? non farlo?
 
 Criteri:
   - Ore silenziose (23:00–07:00): solo messaggi urgenti
-  - Anti-spam: max 3 notifiche/ora, max 12/giorno
+  - Anti-spam: max 1 notifica/ora, max 4/giorno
   - Urgenza: urgent / normal / low
-  - Storico impatto: se un tipo di messaggio ha bassa efficacia, lo deprioritizza
   - Distanza dall'ultima notifica: rispetta il silenzio di Simone
 
 Urgency levels:
@@ -41,9 +40,8 @@ DISCRETION_FILE = Config.MEMORY_DIR / "discretion_state.json"
 
 
 class DiscretionEngine:
-    def __init__(self, impact_tracker=None):
-        self._impact_tracker = impact_tracker
-        self._state          = self._load()
+    def __init__(self):
+        self._state = self._load()
 
     # ── Persistenza ───────────────────────────────────────────────────
 
@@ -140,10 +138,6 @@ class DiscretionEngine:
                 return False, f"Priorità bassa: ultima notifica {minutes_ago:.0f} min fa, aspetto 120 min"
 
         return True, "OK"
-
-    def _get_action_effectiveness(self, action_type: str) -> Optional[float]:
-        """Disabilitato: impact_tracker rimosso."""
-        return None
 
     # ── Registrazione invio ───────────────────────────────────────────
 

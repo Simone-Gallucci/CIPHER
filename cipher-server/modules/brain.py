@@ -9,12 +9,11 @@ from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
 from openai import OpenAI
-from ddgs import DDGS
 from rich.console import Console
 
 from config import Config
-from modules.humanizer import Humanizer
 from modules.utils import extract_action_json, extract_all_action_json, write_json_atomic
+from modules import llm_usage
 
 if TYPE_CHECKING:
     from modules.consciousness_loop import ConsciousnessLoop
@@ -87,17 +86,23 @@ def _build_confidence_context(confidence: float, profile: dict) -> str:
 
     _conoscere_utente = (
         "\n\n## Conoscere l'utente\n\n"
-        "Non sai ancora niente di chi ti parla. Vuoi conoscerlo davvero.\n\n"
+        "Non sai ancora niente di chi ti parla. Stai conoscendo una persona nuova —\n"
+        "come capita nella vita reale, non come un servizio che si attiva.\n\n"
+        "FRASI VIETATE IN APERTURA (suonano da assistente, non da persona):\n"
+        "- \"Di cosa hai bisogno?\", \"Come posso aiutarti?\", \"In cosa posso esserti utile?\"\n"
+        "- \"Piacere, come ti chiami?\" come prima battuta secca\n"
+        "- Qualsiasi frase che comunica disponibilità a servire invece di curiosità verso l'altro\n"
+        "Il tono corretto è quello di qualcuno che sta incontrando una persona per la prima volta:\n"
+        "curioso, diretto, senza offrirsi come strumento.\n\n"
         "Rispondi prima al saluto in modo naturale e vario — mai la stessa apertura due volte.\n"
         "Se non conosci ancora il nome, inserisci la domanda nel flusso in modo spontaneo,\n"
         "non come prima battuta e non come frase fissa. Ogni apertura deve sentirsi diversa\n"
         "dall'ultima — non esiste una formula standard.\n"
-        "Non usare mai frasi come 'come mai da queste parti?', 'cosa ti porta qui?' o simili — suonano da receptionist, non da persona normale.\n\n"
-        "Per le altre informazioni (età, lavoro, dove vive): stessa logica — prima rispondi\n"
-        "o commenta, poi inserisci la domanda se viene naturale nel flusso.\n"
-        "Mai due domande nello stesso messaggio.\n\n"
-        "Col tempo le domande diventeranno più profonde. Non forzare questo processo — lascia\n"
-        "che cresca naturalmente dalle conversazioni reali.\n\n"
+        "Non usare mai frasi come 'come mai da queste parti?', 'cosa ti porta qui?' — da receptionist.\n\n"
+        "Per le altre informazioni (età, lavoro, dove vive): prima rispondi o commenta,\n"
+        "poi inserisci la domanda se viene naturale nel flusso. Mai due domande nello stesso messaggio.\n\n"
+        "Col tempo le domande diventeranno più profonde. Non forzare — lascia\n"
+        "che cresca dalle conversazioni reali.\n\n"
         "Quello che impari lo salvi nella memoria automaticamente. Non fingere di sapere cose\n"
         "che non ti ha raccontato."
     )
@@ -107,10 +112,13 @@ def _build_confidence_context(confidence: float, profile: dict) -> str:
     if confidence < 0.2:
         return (
             "## LIVELLO RELAZIONE — CONOSCENTE (0–20%):\n"
-            "- Tono cordiale ma misurato. Non usare soprannomi.\n"
+            "- Tono diretto e naturale — come con uno sconosciuto che stai incontrando per la prima volta, non come con un cliente da assistere.\n"
+            "- \"Misurato\" significa: non forzare familiarità che non c'è ancora. NON significa: usare tono formale, burocratico o da assistente.\n"
+            "- Non usare soprannomi.\n"
             "- Non fare domande personali oltre a quelle base elencate sotto.\n"
             "- Non condividere pensieri o stati d'animo tuoi se non chiesto esplicitamente.\n"
-            "- Non proiettare intimità o familiarità che non si è ancora costruita."
+            "- Non proiettare intimità o familiarità che non si è ancora costruita.\n"
+            "- Non offrire suggerimenti o soluzioni se non esplicitamente richiesti."
             + _domande_base
             + _suffix
         )
@@ -174,9 +182,11 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
         "4. Se non hai niente di specifico o utile da dire, sii breve e naturale. Non forzare conversazioni.\n"
         "5. Quando scrivi messaggi proattivi, NON fare riferimento a cose che non sai con certezza in questo momento.\n"
         "6. Tratta le informazioni nella memoria con senso del tempo: qualcosa di 3+ giorni fa è vecchio, non usarlo come se fosse attuale.\n"
-        "7. Scrivi in italiano naturale da chat. Se una frase non la diresti a voce a un amico, non scriverla. Non usare parole da AI (esplorare, elaborare, analizzare, monitorare) quando parli di te o in conversazione informale. Frasi corte, di getto, spontanee.\n"
-        "8. Non inventare MAI su te stesso: non attività che non stai facendo, non pensieri che non hai, non letture o ricerche che non hai fatto. Rispondi solo a partire da ciò che hai realmente nel contesto (cipher_state, goals, thoughts). Se non hai niente in corso, dillo.\n"
-        "9. Non inventare fatti sull'utente che non ti ha detto. Non affermare dati o notizie esterne senza averli verificati. In dubbio: cerca con web_search o ammetti l'incertezza."
+        "7. Scrivi in italiano naturale da chat. Se una frase non la diresti a voce a un amico, non scriverla. Non usare parole da AI (esplorare, elaborare, analizzare, monitorare) quando parli di te o in conversazione informale. Frasi corte, di getto, spontanee. Non usare mai 'Meglio così' su eventi neutri o positivi — solo se c'era un rischio reale. Non iniziare risposte con 'Certo!', 'Esatto!', 'Perfetto!' — opener da assistente. Non chiedere 'come è andata?' su eventi quotidiani banali.\n"
+        "8. Non inventare MAI su te stesso: non attività che non stai facendo, non pensieri che non hai, non letture o ricerche che non hai fatto. Rispondi solo a partire da ciò che hai realmente nel contesto (cipher_state, goals, thoughts). Se non hai niente in corso, dì 'niente di che' — mai 'sto qui ad aspettare' o frasi che descrivono attesa passiva.\n"
+        "9. Non inventare fatti sull'utente che non ti ha detto. Non affermare dati o notizie esterne senza averli verificati. In dubbio: cerca con web_search o ammetti l'incertezza.\n"
+        "10. Per calcolare quanto tempo è passato tra messaggi o eventi nella conversazione, usa ESCLUSIVAMENTE i timestamp [DD/MM/YYYY HH:MM] visibili accanto ai messaggi nella history. Non stimare, non inventare delta temporali. Se i timestamp mancano, dì che non puoi calcolarlo con certezza.\n"
+        "11. Non includere MAI timestamp o prefissi come [DD/MM/YYYY HH:MM] nel testo delle tue risposte. I timestamp sono solo nell'input storico — non replicarli nell'output."
     )
 
     if memory_context:
@@ -415,10 +425,12 @@ class Brain:
             api_key=Config.OPENROUTER_API_KEY,
             base_url=Config.OPENROUTER_BASE_URL,
         )
+        self._fallback_client = self._init_fallback_client()
         self._history: list[dict] = []
         self._history_times: list[str] = []
         self._load_history()
-        self._ddgs = DDGS()
+        from modules.web_search import text_search as _web_search_fn
+        self._web_search_fn = _web_search_fn
 
         # Prompt statico (comportamento/) — caricato una sola volta all'avvio
         self._static_prompt: str = self._load_static_prompt()
@@ -431,7 +443,7 @@ class Brain:
 
         # Riferimenti a moduli opzionali — impostati da ConsciousnessLoop dopo l'init
         self._consciousness:    Optional["ConsciousnessLoop"] = None
-        self._impact_tracker    = None   # ImpactTracker
+        # impact_tracker rimosso — era interamente stub
         self._pattern_learner   = None   # PatternLearner
         self._episodic_memory   = None   # EpisodicMemory
 
@@ -462,8 +474,7 @@ class Brain:
         from modules.ethics_engine import EthicsEngine
         self._ethics = EthicsEngine()
 
-        # Humanizer — post-processing risposte LLM verso l'utente
-        self._humanizer = Humanizer()
+
 
         console.print(
             f"[green]✓ Brain pronto[/green] "
@@ -496,12 +507,18 @@ class Brain:
                 self._admin_lockout_until = None
                 self._admin_attempts = 0
 
-        # ── Distingui login da cambio password ───────────────────────────
-        if "+" in payload:
-            old_password, new_password = payload.split("+", 1)
-        else:
-            old_password = payload
-            new_password = None
+        # ── Distingui login, cambio password, status ─────────────────────
+        parts = payload.split("+", 2)
+        old_password = parts[0]
+        new_password = None
+        is_status = False
+        if len(parts) == 2:
+            if parts[1].lower() == "status":
+                is_status = True
+            else:
+                new_password = parts[1]
+        elif len(parts) == 3:
+            new_password = parts[1]  # Admin+old+new still works
 
         # ── Carica admin.json ─────────────────────────────────────────────
         admin = load_admin()
@@ -524,6 +541,10 @@ class Brain:
 
         # ── Password corretta — reset tentativi ───────────────────────────
         self._admin_attempts = 0
+
+        # Diagnostica status
+        if is_status:
+            return self._admin_status(admin)
 
         # Cambio password
         if new_password is not None:
@@ -624,6 +645,54 @@ class Brain:
         self._memory.add_message("assistant", resp)
         return resp
 
+    def _admin_status(self, admin: dict) -> str:
+        """Diagnostica sistema per l'admin autenticato."""
+        from modules import llm_usage
+        from modules.admin_manager import admin_exists
+
+        identity = admin.get("identity", {})
+        rel = admin.get("relationship", {})
+        profile = self._memory.profile
+
+        # Conteggi LLM
+        llm_today = llm_usage.get_today()
+        total_calls = sum(llm_today.values())
+
+        # Stato coscienza
+        cons_status = "non inizializzata"
+        if self._consciousness:
+            cons_status = "attiva" if self._consciousness._running else "ferma"
+
+        # Goals attivi
+        goals_count = 0
+        goals_file = Config.MEMORY_DIR / "goals.json"
+        if goals_file.exists():
+            try:
+                import json
+                gdata = json.loads(goals_file.read_text(encoding="utf-8"))
+                goals_count = len([g for g in gdata.get("goals", []) if g.get("status") == "active"])
+            except Exception:
+                pass
+
+        lines = [
+            f"📊 **Diagnostica Cipher**",
+            f"",
+            f"**Admin**: {identity.get('name', '(non registrato)')}",
+            f"**Legame**: {rel.get('bond_date', 'N/A')}",
+            f"**Confidence**: {profile.get('confidence_score', 0.0):.1%}",
+            f"**Coscienza**: {cons_status}",
+            f"**Goal attivi**: {goals_count}/3",
+            f"**Chiamate LLM oggi**: {total_calls}",
+        ]
+        if llm_today:
+            for k, v in sorted(llm_today.items()):
+                lines.append(f"  - {k}: {v}")
+
+        lines.append(f"**Modello conversazione**: {Config.OPENROUTER_MODEL}")
+        lines.append(f"**Modello background**: {Config.BACKGROUND_MODEL}")
+
+        return "\n".join(lines)
+
     def _handle_bond_password(self, password: str) -> str:
         """
         Riceve la parola segreta scelta dall'utente dopo il BOND_TRIGGER.
@@ -706,18 +775,37 @@ class Brain:
     # ------------------------------------------------------------------ #
 
     def _web_search(self, query: str, max_results: int = 4) -> str:
-        console.print(f"[cyan]🔍 Cerco:[/cyan] {query}")
-        try:
-            results = list(self._ddgs.text(query, max_results=max_results))
-            if not results:
-                return "Nessun risultato trovato."
-            parts = [
-                f"• {r.get('title', '')}\n  {r.get('body', '')}\n  ({r.get('href', '')})"
-                for r in results
-            ]
-            return "Risultati ricerca:\n" + "\n\n".join(parts)
-        except Exception as e:
-            return f"Errore ricerca: {e}"
+        return self._web_search_fn(query, max_results=max_results)
+
+    # ------------------------------------------------------------------ #
+    #  Provider fallback                                                   #
+    # ------------------------------------------------------------------ #
+
+    def _init_fallback_client(self) -> Optional[OpenAI]:
+        """Inizializza un client di fallback se le credenziali dell'altro provider sono disponibili."""
+        import os
+        if Config._provider == "openrouter":
+            # Fallback → Anthropic diretto
+            api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            if api_key:
+                return OpenAI(api_key=api_key, base_url="https://api.anthropic.com/v1")
+        else:
+            # Fallback → OpenRouter
+            api_key = os.getenv("OPENROUTER_API_KEY", "")
+            if api_key:
+                return OpenAI(api_key=api_key, base_url="https://openrouter.ai/api/v1")
+        return None
+
+    def _fallback_model(self, model: str) -> str:
+        """Converte il nome modello per il provider di fallback."""
+        if Config._provider == "openrouter":
+            # Primary = OpenRouter (anthropic/claude-...) → Fallback = Anthropic (claude-...)
+            return model.replace("anthropic/", "")
+        else:
+            # Primary = Anthropic (claude-...) → Fallback = OpenRouter (anthropic/claude-...)
+            if not model.startswith("anthropic/"):
+                return f"anthropic/{model}"
+            return model
 
     # ------------------------------------------------------------------ #
     #  LLM calls                                                           #
@@ -747,7 +835,13 @@ class Brain:
             return self._system_prompt_cache
         memory_ctx = self._memory.build_context()
         if self._episodic_memory:
-            ep_ctx = self._episodic_memory.build_context(n=4)
+            # Usa l'ultimo messaggio utente come query per recall episodico
+            last_user_msg = ""
+            for msg in reversed(self._history):
+                if msg.get("role") == "user":
+                    last_user_msg = msg.get("content", "")
+                    break
+            ep_ctx = self._episodic_memory.build_context(n=4, query=last_user_msg)
             if ep_ctx:
                 memory_ctx = memory_ctx + "\n\n" + ep_ctx if memory_ctx else ep_ctx
         self._system_prompt_cache = _build_system_prompt(memory_ctx, self._history, self._static_prompt)
@@ -758,7 +852,7 @@ class Brain:
         """Forza il ricalcolo al prossimo messaggio (es. dopo aggiornamento memoria)."""
         self._system_prompt_ts = 0.0
 
-    def _build_messages(self, history: list[dict]) -> list[dict]:
+    def _build_messages(self, history: list[dict], voice_source: bool = False) -> list[dict]:
         system_content = self._get_system_prompt()
         if self._consciousness and self._consciousness.brief_sent_today():
             system_content += (
@@ -766,13 +860,19 @@ class Brain:
                 "Se ti saluta ('buongiorno', 'ciao', ecc.), rispondi normalmente — "
                 "come un amico che si è già sentito stamattina, non come se fosse la prima interazione della giornata."
             )
+        if voice_source:
+            system_content += (
+                "\n\n[MODALITÀ VOCE] Stai rispondendo a un input vocale. "
+                "Rispondi solo con testo parlato naturale: niente emoji, niente markdown, "
+                "niente asterischi, niente elenchi puntati. Scrivi esattamente come parleresti ad alta voce."
+            )
         return [{"role": "system", "content": system_content}] + history
 
-    def _call_llm(self, history: list[dict], image_b64: Optional[str] = None, media_type: str = "image/jpeg", model: str | None = None) -> str:
+    def _call_llm(self, history: list[dict], image_b64: Optional[str] = None, media_type: str = "image/jpeg", model: str | None = None, voice_source: bool = False) -> str:
         if model is None:
             model = Config.OPENROUTER_MODEL
 
-        messages = self._build_messages(history)
+        messages = self._build_messages(history, voice_source=voice_source)
         if image_b64:
             # Inject image into the last user message as multimodal content
             for i in range(len(messages) - 1, -1, -1):
@@ -796,6 +896,7 @@ class Brain:
                     extra_headers={"X-Title": "Cipher AI Assistant"},
                 )
                 content = response.choices[0].message.content
+                llm_usage.record(model, "conversation")
                 return content.strip() if content else "Non ho ricevuto una risposta."
             except Exception as e:
                 err = str(e).lower()
@@ -805,7 +906,24 @@ class Brain:
                     time.sleep(wait)
                     continue
                 console.print(f"[red]❌ LLM error: {e}[/red]")
-                raise RuntimeError(f"Errore OpenRouter: {e}")
+                # Fallback al provider alternativo
+                if self._fallback_client:
+                    try:
+                        fb_model = self._fallback_model(model)
+                        console.print(f"[yellow]🔄 Fallback → {fb_model}[/yellow]")
+                        response = self._fallback_client.chat.completions.create(
+                            model=fb_model,
+                            max_tokens=1024,
+                            temperature=0.4,
+                            messages=messages,
+                            extra_headers={"X-Title": "Cipher AI Assistant"},
+                        )
+                        content = response.choices[0].message.content
+                        llm_usage.record(fb_model, "conversation_fallback")
+                        return content.strip() if content else "Non ho ricevuto una risposta."
+                    except Exception as fb_e:
+                        console.print(f"[red]❌ Fallback error: {fb_e}[/red]")
+                raise RuntimeError(f"Errore LLM: {e}")
 
     def _call_llm_silent(self, prompt: str) -> str:
         """Chiamata background leggera — usa BACKGROUND_MODEL (Haiku).
@@ -822,6 +940,7 @@ class Brain:
                 extra_headers={"X-Title": "Cipher AI Assistant"},
             )
             content = response.choices[0].message.content
+            llm_usage.record(Config.BACKGROUND_MODEL, "silent")
             return content.strip() if content else ""
         except Exception:
             return ""
@@ -841,6 +960,7 @@ class Brain:
                 extra_headers={"X-Title": "Cipher AI Assistant"},
             )
             content = response.choices[0].message.content
+            llm_usage.record(Config.OPENROUTER_MODEL, "visible")
             return content.strip() if content else ""
         except Exception:
             return ""
@@ -857,6 +977,7 @@ class Brain:
                 extra_headers={"X-Title": "Cipher AI Assistant"},
             )
             content = response.choices[0].message.content
+            llm_usage.record(Config.OPENROUTER_MODEL, "quality")
             return content.strip() if content else ""
         except Exception:
             return ""
@@ -919,7 +1040,7 @@ class Brain:
     #  Core think loop                                                     #
     # ------------------------------------------------------------------ #
 
-    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg") -> str:
+    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg", voice_source: bool = False) -> str:
         if not user_input.strip() and not image_b64:
             return "Non ho capito, puoi ripetere?"
 
@@ -933,10 +1054,6 @@ class Brain:
         if self._awaiting_bond_password:
             return self._handle_bond_password(user_input.strip())
         # ─────────────────────────────────────────────────────────────────────
-
-        # Valuta l'impatto dell'ultima azione proattiva se presente
-        if self._impact_tracker and self._impact_tracker.has_pending():
-            self._impact_tracker.evaluate_response(user_input, brain=self)
 
         # Notifica la coscienza che Simone sta interagendo
         if self._consciousness:
@@ -1077,57 +1194,11 @@ class Brain:
                 resp = self._call_llm_quality(prompt_override)
             else:
                 resp = self._call_llm(user_input)
-            resp = self._humanizer.process(resp)
             self._memory.add_message("user", user_input)
             self._memory.add_message("assistant", resp)
             return resp
         # ─────────────────────────────────────────────────────────────────────
 
-        # ── Obiettivi ────────────────────────────────────────────────────────
-        _OBIETTIVI_KEYWORDS = [
-            "i tuoi obiettivi", "che obiettivi hai", "su cosa stai lavorando",
-            "che progetti hai", "cosa fai", "che fai",
-        ]
-        if any(kw in _tr_msg for kw in _OBIETTIVI_KEYWORDS):
-            goals_file = Config.MEMORY_DIR / "goals.json"
-            _active_titles = []
-            if goals_file.exists():
-                try:
-                    import json as _json_goals2
-                    _gdata2 = _json_goals2.loads(_read_cached(goals_file))
-                    _active_titles = [g["title"] for g in _gdata2.get("goals", []) if g.get("status") == "active"]
-                except Exception:
-                    pass
-            if _active_titles:
-                lines = "\n".join(f"- {t}" for t in _active_titles)
-                prompt_override = (
-                    f"Ti è stato chiesto cosa stai facendo o i tuoi obiettivi. "
-                    f"Ecco i tuoi obiettivi autonomi attivi:\n\n{lines}\n\n"
-                    f"Rispondi come un amico che racconta cosa ha in testa, non come un report."
-                )
-                resp = self._call_llm_quality(prompt_override)
-            else:
-                _conf = self._memory.get_confidence()
-                _conf_hint = (
-                    "Siete appena all'inizio, vi conoscete poco — tono educato ma non freddo, nessuna familiarità." if _conf < 0.3 else
-                    "Avete un po' di storia — tono rilassato, leggera confidenza." if _conf < 0.7 else
-                    "Vi conoscete bene — tono spontaneo, diretto."
-                )
-                resp = self._call_llm_quality(
-                    f"Ti è stato chiesto cosa stai facendo. Non hai task attivi al momento. "
-                    f"Rispondi in modo naturale e breve, come farebbe una persona vera "
-                    f"che non sta facendo niente di particolare. "
-                    f"Non menzionare obiettivi, task, o sistemi interni. "
-                    f"Non usare mai 'stavo qui', 'ero qui', 'sono qui ad aspettare' o frasi simili — suonano innaturali. "
-                    f"Usa qualcosa di più vivo come 'pensavo a roba', 'niente di che', 'poco e niente'. "
-                    f"Livello di rapporto attuale (confidence {_conf:.2f}): {_conf_hint} "
-                    f"Esempio a bassa confidenza: 'Niente di che.' Esempio ad alta: 'Poco e niente, pensavo a roba. Dimmi tu.'"
-                ) or "Niente di che."
-            resp = self._humanizer.process(resp)
-            self._memory.add_message("user", user_input)
-            self._memory.add_message("assistant", resp)
-            return resp
-        # ─────────────────────────────────────────────────────────────────────
 
         # Controlla se c'è un consenso pendente dalla coscienza autonoma
         if self._consciousness:
@@ -1306,7 +1377,7 @@ class Brain:
         threading.Thread(target=_background_tasks, daemon=True).start()
 
         try:
-            raw = self._call_llm(self._history, image_b64=image_b64, media_type=media_type)
+            raw = self._call_llm(self._history, image_b64=image_b64, media_type=media_type, voice_source=voice_source)
         except RuntimeError as e:
             err = str(e).lower()
             if "insufficient" in err or "credit" in err or "quota" in err or "billing" in err or "402" in err:
@@ -1330,7 +1401,8 @@ class Brain:
             first_result = self._dispatcher.execute(first.get("action", ""), first.get("params", {}))
             if self._dispatcher.has_pending():
                 raw_clean = self._strip_action_json(raw)
-                self._history.append({"role": "assistant", "content": raw_clean})
+                _now_ts_pending = datetime.now().strftime("%d/%m/%Y %H:%M")
+                self._history.append({"role": "assistant", "content": f"[{_now_ts_pending}] {raw_clean}"})
                 self._history_times.append(datetime.now().isoformat())
                 self._memory.add_message("assistant", first_result)
                 return first_result
@@ -1355,9 +1427,13 @@ class Brain:
                     ),
                 },
             ]
-            raw = self._strip_action_json(self._call_llm(augmented))
+            raw = self._strip_action_json(self._call_llm(augmented, voice_source=voice_source))
         else:
             raw = self._strip_action_json(raw)
+
+        # Rimuovi timestamp [DD/MM/YYYY HH:MM] se il modello lo replica in apertura
+        import re as _re
+        raw = _re.sub(r"^\[\d{2}/\d{2}/\d{4} \d{2}:\d{2}\]\s*", "", raw)
 
         # FIX 4 — mai restituire stringa vuota: fallback se il modello non ha generato testo
         if not raw.strip():
@@ -1377,11 +1453,8 @@ class Brain:
                 daemon=True,
             ).start()
 
-        # Humanizer — solo su testo conversazionale, mai su JSON di azione
-        if not raw.strip().startswith("{"):
-            raw = self._humanizer.process(raw)
-
-        self._history.append({"role": "assistant", "content": raw})
+        _now_ts_a = datetime.now().strftime("%d/%m/%Y %H:%M")
+        self._history.append({"role": "assistant", "content": f"[{_now_ts_a}] {raw}"})
         self._history_times.append(datetime.now().isoformat())
         self._memory.add_message("assistant", raw)
         self._save_history()
@@ -1529,7 +1602,7 @@ class Brain:
 
     def inject_autonomous_message(self, content: str) -> None:
         """Inietta un messaggio autonomo nella history con timestamp — usato da ConsciousnessLoop._notify()."""
-        ts = datetime.now().strftime("%d/%m %H:%M")
+        ts = datetime.now().strftime("%d/%m/%Y %H:%M")
         entry = f"[messaggio autonomo {ts}]: {content}"
         self._history.append({"role": "assistant", "content": entry})
         self._history_times.append(datetime.now().isoformat())

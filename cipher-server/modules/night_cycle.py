@@ -39,14 +39,12 @@ class NightCycle:
         pattern_learner=None,   # PatternLearner
         cipher_interests=None,  # CipherInterests
         notify_fn=None,         # callable(str) -> None
-        impact_tracker=None,    # ImpactTracker
     ):
         self._brain           = brain
         self._episodic        = episodic_memory
         self._patterns        = pattern_learner
         self._interests       = cipher_interests
         self._notify          = notify_fn
-        self._impact_tracker  = impact_tracker
 
         self._last_run_file   = Config.MEMORY_DIR / "night_cycle_last.json"
         self._summaries_file  = Config.MEMORY_DIR / "daily_summaries.md"
@@ -108,17 +106,9 @@ class NightCycle:
                             episode_type="daily_summary",
                             tags=["sommario", today_str],
                         )
-                    # Invia sommario a Simone (mattina seguente — già è le 3:00)
-                    if self._notify and self._impact_tracker:
-                        msg = f"🌙 Riflessione notturna del {today_str}:\n{summary}"
-                        self._impact_tracker.log_action("night_summary", msg)
-                        # Non inviamo alle 3:00 — lo leggerà la mattina
+                    # Sommario registrato — lo leggerà la mattina via morning brief
             else:
                 console.print("[dim]🌙 Sommario notturno saltato: confidence insufficiente[/dim]")
-
-            # 3. Aggiorna pattern
-            if self._patterns:
-                self._patterns.analyze_today(conversations_text)
 
         # 3b. Aggiungi sommario azioni del giorno
         try:

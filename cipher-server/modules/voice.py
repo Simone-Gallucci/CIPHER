@@ -66,24 +66,30 @@ class Voice:
         if not self.enabled:
             return
 
+        # Genera audio FUORI dal lock per non bloccare altri thread durante I/O di rete
+        tmp_path = None
+        try:
+            audio = self._client.text_to_speech.convert(
+                voice_id=Config.ELEVENLABS_VOICE_ID,
+                text=clean,
+                model_id="eleven_multilingual_v2",
+            )
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                tmp_path = tmp.name
+                for chunk in audio:
+                    tmp.write(chunk)
+        except Exception as e:
+            console.print(f"[red]Errore TTS: {e}[/red]")
+            return
+
+        # Riproduzione sotto lock (breve: solo playback locale)
         with self._lock:
             self._speaking = True
             _mute_mic(True)
-            tmp_path = None
             try:
-                audio = self._client.text_to_speech.convert(
-                    voice_id=Config.ELEVENLABS_VOICE_ID,
-                    text=clean,
-                    model_id="eleven_multilingual_v2",
-                )
-                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-                    tmp_path = tmp.name
-                    for chunk in audio:
-                        tmp.write(chunk)
-
                 subprocess.run(["mpg123", "-q", tmp_path], capture_output=True)
             except Exception as e:
-                console.print(f"[red]Errore TTS: {e}[/red]")
+                console.print(f"[red]Errore playback: {e}[/red]")
             finally:
                 time.sleep(0.3)
                 _mute_mic(False)
@@ -107,10 +113,7 @@ class Voice:
                 text=clean,
                 model_id="eleven_multilingual_v2",
             )
-            buf = b""
-            for chunk in audio:
-                buf += chunk
-            return buf
+            return b"".join(audio)
         except Exception as e:
             console.print(f"[red]Errore TTS synthesize: {e}[/red]")
             return None

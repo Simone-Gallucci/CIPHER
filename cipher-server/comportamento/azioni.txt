@@ -54,6 +54,9 @@ timer_set(seconds, label) | timer_list() | timer_cancel(id)
 {"action": "task_add", "params": {"label": "...", "action": "telegram_message", "params": {"text": "..."}, "schedule": {"type": "daily", "time": "09:00"}}}
 task_list() | task_remove(id)
 
+# Export conversazioni
+{"action": "conversation_export", "params": {"days": 7, "format": "txt"}}
+
 # Gmail — SOLO su richiesta esplicita dell'utente, richiedono SEMPRE conferma (mai autonomo)
 {"action": "gmail_list", "params": {"max_results": 10}}
 {"action": "gmail_search", "params": {"query": "from:nome@email.com", "max_results": 10}}

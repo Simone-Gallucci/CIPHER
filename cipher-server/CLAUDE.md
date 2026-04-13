@@ -72,7 +72,7 @@ Filosofia: il rapporto cresce dalle conversazioni reali. Il sistema misura segna
 **Ordine di init in `server.py`:**
 `Brain → Notifier → Scheduler → ConsciousnessLoop`
 
-ConsciousnessLoop inietta retroattivamente in Brain i moduli opzionali: `_impact_tracker`, `_pattern_learner`, `_episodic_memory`. Tutti partono come `None` — ogni riferimento in Brain deve fare `if self._xxx:`.
+ConsciousnessLoop inietta retroattivamente in Brain i moduli opzionali: `_pattern_learner`, `_episodic_memory`. Tutti partono come `None` — ogni riferimento in Brain deve fare `if self._xxx:`.
 
 `cipher_bot.py` e `memory_worker.py` girano come processi separati (servizi systemd distinti).
 
@@ -89,13 +89,12 @@ Telegram → cipher_bot.py
 `Brain.think()` in sequenza:
 1. Intercetta `Admin+Password` — regex `^[Aa]dmin\+(.+)` → `_handle_admin_command()` (priorità massima)
 2. `_awaiting_bond_password` → `_handle_bond_password()`
-3. `impact_tracker.evaluate_response()` (se disponibile)
-4. Controlla `tabula rasa` / `revoca autonomia` / reset conv keywords
-5. Controlla audit / pensieri / obiettivi keywords
+3. Controlla `tabula rasa` / `revoca autonomia` / reset conv keywords
+5. Controlla audit / pensieri keywords
 6. `consciousness.handle_consent_response()`
 7. `dispatcher.has_pending()` → `check_consent()`
 8. `handle_forget_command` / `handle_remember_command`
-9. Append a history con timestamp prefix
+9. Append a history con timestamp prefix: user `[DD/MM/YYYY HH:MM] testo`; assistant `[DD/MM/YYYY HH:MM] risposta`
 10. `_get_system_prompt()` (TTL 300s, ricalcola se scaduto)
 11. `_call_llm()` → `_route_model()` → risposta LLM
 12. Parsa eventuali JSON di azione dalla risposta
@@ -130,7 +129,7 @@ Thread daemon, ciclo ogni ~60 secondi:
 |---|---|---|---|
 | 1 | Static prompt | `comportamento/` | sempre |
 | 2 | Data/ora | `datetime.now()` | sempre |
-| 3 | 9 REGOLE FONDAMENTALI | hardcoded in Brain | sempre |
+| 3 | 10 REGOLE FONDAMENTALI | hardcoded in Brain | sempre |
 | 4 | Memory context | `memory.py` | sempre |
 | 5 | Livello confidenza | `profile.json` | sempre |
 | 6 | `## Conoscere l'utente` | hardcoded in Brain | solo se `confidence < 0.7` |
@@ -212,7 +211,7 @@ Configurazione `.env`:
 
 | Score | Livello | Comportamento |
 |---|---|---|
-| 0.0–0.2 | Conoscente | Tono cordiale ma misurato, no domande personali, no intimità |
+| 0.0–0.2 | Conoscente | Tono diretto e naturale (non formale), senza forzare familiarità — come con uno sconosciuto che stai incontrando, non con un cliente da assistere |
 | 0.2–0.4 | Amico | Una domanda personale leggera per sessione, opinioni occasionali |
 | 0.4–0.6 | Amico stretto | Domande naturali, stati d'animo condivisi, ironia leggera |
 | 0.6–0.8 | Confidente | Emozioni aperte, domande profonde, può usare nome/soprannomi |
@@ -255,7 +254,7 @@ Quando `confidence_score >= 0.8` per la prima volta (`bond_proposed = False`), C
 }
 ```
 
-Password: SHA-256 con salt random 32 byte. Checksum SHA-256 sull'intero file per verifica integrità.
+Password: PBKDF2-SHA256 con salt random 32 byte (600k iterazioni). Retrocompatibile con vecchio formato SHA-256. Checksum SHA-256 sull'intero file per verifica integrità.
 
 ### Flusso post-Tabula Rasa
 
@@ -352,7 +351,6 @@ alias cipher-restart='sudo systemctl restart cipher.service cipher-telegram.serv
 | File | Cosa contiene | Ciclo di vita |
 |---|---|---|
 | `modules/brain.py` | Core: LLM routing, system prompt, dispatcher, history, confidence | Ad ogni `POST /chat` |
-| `modules/humanizer.py` | Post-processing risposte LLM — rimuove pattern AI, rende il testo indistinguibile da umano | Chiamato da Brain (think) e ConsciousnessLoop (_notify) su ogni output visibile |
 | `modules/consciousness_loop.py` | Thread daemon — tutti i task periodici | Daemon continuo |
 | `modules/self_reflection.py` | Auto-riflessione → `cipher_state.json` | Ogni 30 min |
 | `modules/goal_manager.py` | Generazione e gestione obiettivi | Ogni 5/20 min |
@@ -397,7 +395,8 @@ alias cipher-restart='sudo systemctl restart cipher.service cipher-telegram.serv
 
 | File | Cosa contiene | Stato effettivo |
 |---|---|---|
-| `modules/impact_tracker.py` | Traccia efficacia messaggi proattivi | `log_action()` e `mark_ignored()` **attivi**; `_get_action_effectiveness()` → sempre `None` |
+| `modules/web_search.py` | Ricerca web centralizzata (DDGS text + news) | Usato da brain.py e realtime_context.py |
+| `modules/llm_usage.py` | Tracking chiamate LLM per giornata | Scritto da brain.py; letto da health endpoint e admin status |
 | `modules/pattern_learner.py` | Analisi pattern comportamentali | `record_message()` e `record_interaction()` **attivi**; `_update_motivational_profile()` in `night_cycle.py` disabilitato |
 
 ### Comportamento e configurazione
@@ -446,10 +445,9 @@ alias cipher-restart='sudo systemctl restart cipher.service cipher-telegram.serv
 | `memory/ethics_learned.json` | Permessi autonomia acquisiti dall'utente | Scritto da `ethics_engine.py` |
 | `memory/ethics_log.md` | Log decisioni etiche | Scritto da `ethics_engine.py` |
 | `memory/goals.md` | Storico testuale obiettivi completati | Scritto da `goal_manager.py` |
-| `memory/impact_log.json` | Log impatto messaggi proattivi (per ImpactTracker) | Scritto da `impact_tracker.py` |
+| `memory/llm_usage.json` | Conteggi chiamate LLM per giorno (ultimi 30 giorni) | Scritto da `llm_usage.py` |
 | `memory/last_inspection.json` | Timestamp ultima auto-ispezione (48h interval) | Scritto da `ConsciousnessLoop` |
 | `memory/memory_worker_state.json` | Stato ultimo run del memory worker | Scritto da `memory_worker.py` |
-| `memory/outcome_log.json` | Log outcomes messaggi proattivi | Scritto da `impact_tracker.py` |
 | `memory/patterns.json` | Cache patterns comportamentali locale | Scritto da `pattern_learner.py` |
 | `memory/realtime_context.json` | Cache contesto real-time (meteo + news) | Scritto da `realtime_context.py`; TTL 60 min |
 | `memory/screenshots.md` | Log screenshot condivisi dall'utente | Scritto a runtime |
@@ -495,6 +493,7 @@ brain.invalidate_system_prompt()
 |---|---|
 | `tabula rasa` / `/tabularasa` | Propone reset completo memoria (chiede conferma) |
 | `Admin+Password` | Login admin: ripristina profilo post-Tabula Rasa |
+| `Admin+Password+status` | Diagnostica sistema (LLM calls, confidence, goals, modelli) |
 | `Admin+VecchiaPassword+NuovaPassword` | Cambio parola segreta |
 | `revoca autonomia` | Resetta tutti i permessi acquisiti (chiede conferma) |
 | `revoca autonomia [azione]` | Revoca permesso specifico |
@@ -527,7 +526,7 @@ I moduli background (`GoalManager`, `SelfReflection`) devono sempre includere `{
 - `changelog.json` è permanente — è in `data/`, non in `memory/`. Non spostarlo.
 - `data/patterns.json` viene cancellato da Tabula Rasa; i pattern strutturati vengono salvati in `admin.json["patterns"]` al momento del bond.
 - Flask su `127.0.0.1` — non cambiare a `0.0.0.0`. Esposizione gestita da `cipher-funnel.service`.
-- Tag messaggi proattivi: prefisso `[messaggio autonomo DD/MM HH:MM]: ...` — non alterare il formato.
+- Tag messaggi proattivi: prefisso `[messaggio autonomo DD/MM/YYYY HH:MM]: ...` — non alterare il formato.
 - `GoalManager`: `goals.json` key `"goals"`. Vuoto: `{"goals": []}`.
 - `DiscretionEngine`: `discretion_state.json` key `"sent_log"`. Vuoto: `{"sent_log": []}`.
 - Gmail: scope `gmail.modify` in `Config.GOOGLE_SCOPES` — non rimuoverlo senza rigenerare il token.
@@ -535,13 +534,19 @@ I moduli background (`GoalManager`, `SelfReflection`) devono sempre includere `{
 - Scrittura file: solo dentro `Config.HOME_DIR` o `Config.MEMORY_DIR`.
 - Mai hardcodare path: usare sempre `Config.*`.
 - `_call_llm_quality()` non ha system prompt — non aggiungerne uno senza capire le conseguenze su NightCycle.
+- `_OBIETTIVI_KEYWORDS` è stato **rimosso intenzionalmente** da `Brain.think()`. Non reintrodurlo. Il flusso normale `_call_llm()` gestisce già "che fai?" correttamente: i goal attivi sono iniettati nel system prompt dinamico (blocco `## Task in corso`, solo titoli), e l'identità Cipher è sempre presente. Il vecchio handler usava `_call_llm_quality()` senza system prompt, causando risposte senza identità e hallucination.
+- `humanizer.py` è stato **rimosso intenzionalmente**. Non reintrodurlo. Il post-processing tramite un secondo LLM senza identità Cipher riscriveva le risposte perdendo il personaggio ("Sono Claude, un assistente AI") e alterava il significato. La qualità del tono è ora gestita direttamente dalle regole nel system prompt.
+- **Regole linguistiche in `brain.py` regola 7** (hardcoded): include divieti su "Meglio così" su eventi neutri, opener da assistente ("Certo!", "Esatto!", "Perfetto!"), e "come è andata?" su eventi banali. Non rimuoverle — coprono casi non gestiti da `comportamento/`.
+- **Banda CONOSCENTE in `_build_confidence_context()`** (confidence < 0.2): include "Non offrire suggerimenti o soluzioni se non esplicitamente richiesti." — non rimuovere. La banda ora chiarisce esplicitamente che "misurato" = non forzare familiarità, NON = tono formale o da assistente.
+- **`_conoscere_utente` in `_build_confidence_context()`**: iniettato se `confidence < 0.7`. Contiene elenco esplicito di frasi vietate ("Di cosa hai bisogno?", "Come posso aiutarti?", "Piacere, come ti chiami?" come apertura secca) — non rimuoverle. Il tono target è *curiosità verso l'altro*, non *disponibilità a servire*.
+- **`comportamento/00_identity.txt` — sezione "Come parli"**: contiene divieti espliciti su frasi da assistente helper ("Di cosa hai bisogno?", "Come posso aiutarti?", "In cosa posso esserti utile?") — non rimuoverle.
+- **Regola doppia domanda in `comportamento/00_identity.txt`**: "Una domanda per messaggio, sempre — indipendentemente dal livello di confidenza." è una regola **generale**, non legata alla banda. La stessa regola esiste anche in `_conoscere_utente` (solo per confidence < 0.7) — sono due layer distinti, non duplicati.
 
 ### Moduli parzialmente attivi
 
 | Modulo | Parti attive | Parti disabilitate |
 |---|---|---|
-| `impact_tracker.py` | `log_action()`, `mark_ignored()` | `_get_action_effectiveness()` → sempre `None`; `engagement_signal` vuoto |
-| `pattern_learner.py` | `record_message()`, `record_interaction()` | `_update_motivational_profile()` in `night_cycle.py` — chiamata commentata |
+| `pattern_learner.py` | `record_message()`, `get_predictions()`, `get_active_hours()`, `get_never_active_hours()` | `_update_motivational_profile()` in `night_cycle.py` — chiamata commentata |
 
 Non rimuovere le parti attive. Non riabilitare le parti disabilitate senza decisione esplicita.
 
@@ -556,14 +561,18 @@ Non rimuovere le parti attive. Non riabilitare le parti disabilitate senza decis
 - **TTL active_history**: 24h messaggi normali, 12h per `[messaggio autonomo...]`. In `_load_history()`.
 - **TTL short_term**: 48h (172800s). In `memory.py`.
 - **System prompt TTL**: 300s (`_SYSTEM_PROMPT_TTL` in Brain).
-- **Tag messaggi proattivi**: prefisso `[messaggio autonomo DD/MM HH:MM]: ...`. Non alterare.
+- **Tag messaggi proattivi**: prefisso `[messaggio autonomo DD/MM/YYYY HH:MM]: ...`. Non alterare.
+- **Timestamp in history**: ogni messaggio in `_history` (user E assistant) porta il prefisso `[DD/MM/YYYY HH:MM]`. La regola 10 del system prompt istruisce l'LLM a usare SOLO questi timestamp per calcoli temporali — non alterare il formato né rimuovere i prefissi.
 - **Morning brief**: gestito solo da `consciousness_loop.py:_send_morning_brief()`. Non reintrodurre nello scheduler.
 - **Morning brief confidence gate**: `confidence >= 0.3`. Non rimuovere.
 - **Check-in confidence gate**: `confidence >= 0.4`. Tra 0.3–0.4: soppresso. Sotto 0.3: delega a goal contact.
 - **Thread LLM**: chiamate LLM da ConsciousnessLoop in thread separato. Nel loop principale → deadlock.
 - **Flask su 127.0.0.1**: non cambiare a `0.0.0.0`.
 - **Consenso azioni sensibili**: `shell_exec`, `fs_delete`, `project_write`, `gmail_send` richiedono conferma esplicita. Il check avviene in Brain/actions, non in `filesystem.py`.
-- **Moduli opzionali Brain**: `_impact_tracker`, `_pattern_learner`, `_episodic_memory` sono `None` all'avvio. Ogni riferimento deve fare `if self._xxx:`.
+- **Moduli opzionali Brain**: `_pattern_learner`, `_episodic_memory` sono `None` all'avvio. Ogni riferimento deve fare `if self._xxx:`.
+- **LLM provider fallback**: Brain ha `_fallback_client` che tenta il provider alternativo (OpenRouter ↔ Anthropic) se il primario fallisce. Richiede la API key dell'altro provider nel `.env`.
+- **Rate limiting**: server.py ha rate limiting per IP (30 req/min) su tutti gli endpoint tranne `/health`.
+- **LLM usage tracking**: `modules/llm_usage.py` registra ogni chiamata LLM in `memory/llm_usage.json` (ultimi 30 giorni).
 - **Google credentials**: in `secrets/`. `google_auth.py` valida scope al boot — token non corrispondente viene eliminato e rilancia OAuth2.
 - **`project_inspect`**: usa `_call_llm`. Hash in `memory/last_project_check.txt`. Diff troncato a 4000 chars.
 - **Anti-spam**: `MAX_PER_HOUR = 1`, `MAX_PER_DAY = 4`. In `modules/discretion.py`. I `calendar_reminder` sono esclusi.
@@ -572,7 +581,6 @@ Non rimuovere le parti attive. Non riabilitare le parti disabilitate senza decis
 - **Goal tipo contact**: generato solo se `confidence < 0.3` E `hours_since_interaction >= 3`. Guardrail triplo post-generazione. Non allentare.
 - **Max goal attivi**: 3. Non aumentare senza valutare impatto su LLM calls.
 - **`_call_llm_quality()` senza system prompt**: non aggiungere system prompt — è deliberato per NightCycle.
-- **Humanizer**: applicato da `Brain.think()` (percorso principale + shortcut pensieri/obiettivi) e da `ConsciousnessLoop._notify()` su tutti i messaggi proattivi. Non applicare su risposte di sistema (admin, tabula rasa, revoca), su SKIP, o su payload JSON (`startswith("{")`). Fallback silenzioso — in caso di errore LLM restituisce il testo originale.
 - **Confidence score non decresce mai**: non aggiungere logica di decremento.
 - **`project_write` crea `.bak`**: solo su sovrascrittura (`not append and target.exists()`). Non rimuovere questo meccanismo.
 - **`glob("*")` su `comportamento/`**: carica tutto — mai lasciare `.bak`, `.old`, file temporanei in quella directory.

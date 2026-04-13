@@ -11,8 +11,6 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
 from config import Config
 from modules.utils import write_json_atomic
 
@@ -157,19 +155,33 @@ class PatternLearner:
             parts.append(f"giorni con dati: {summary['active_days']}")
         return ", ".join(parts) if parts else ""
 
-    def get_engagement_signal(self) -> str:
-        return ""
+    def get_predictions(self, lookahead_hours: int = 3) -> list[dict]:
+        """Prevede le ore più probabili di attività nelle prossime `lookahead_hours` ore.
 
-    # ──────────────────────────────────────────────────────────────────────
-    #  Compatibilità con ConsciousnessLoop.notify_interaction()
-    # ──────────────────────────────────────────────────────────────────────
+        Analizza i dati giornalieri accumulati e restituisce le ore con frequenza
+        significativa (≥3 occorrenze) nel range richiesto.
+        """
+        daily = self._data.get("daily", {})
+        if len(daily) < 3:
+            return []
 
-    def record_interaction(self, hour: int, weekday: int, topic: str) -> None:
-        """No-op — record_message() è il metodo attivo."""
-        pass
+        now_hour = datetime.now().hour
+        target_hours = [(now_hour + i) % 24 for i in range(1, lookahead_hours + 1)]
 
-    def analyze_today(self, conversations_text: str) -> None:
-        pass
+        # Conta frequenza per ora nell'intera storia
+        hour_counts: dict[int, int] = {}
+        for day_data in daily.values():
+            for h in day_data.get("hours", []):
+                hour_counts[h] = hour_counts.get(h, 0) + 1
 
-    def get_predictions(self, lookahead_hours: int = 3) -> list:
-        return []
+        predictions = []
+        for h in target_hours:
+            freq = hour_counts.get(h, 0)
+            if freq >= 3:
+                predictions.append({
+                    "hour": h,
+                    "topic": "attività",
+                    "frequency": freq,
+                })
+
+        return sorted(predictions, key=lambda p: p["frequency"], reverse=True)

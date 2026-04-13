@@ -14,7 +14,6 @@ from datetime import datetime
 from typing import Optional
 
 import requests
-from ddgs import DDGS
 from rich.console import Console
 
 from config import Config
@@ -33,7 +32,6 @@ NEWS_QUERIES = [
 class RealtimeContext:
     def __init__(self, cipher_interests=None):
         self._interests = cipher_interests
-        self._ddgs      = DDGS()
 
     # ── API pubblica ──────────────────────────────────────────────────
 
@@ -129,7 +127,8 @@ class RealtimeContext:
 
         for query in queries[:3]:
             try:
-                results = list(self._ddgs.news(query, max_results=2))
+                from modules.web_search import news_search
+                results = news_search(query, max_results=2)
                 for r in results:
                     title = r.get("title", "").strip()
                     _skip = (

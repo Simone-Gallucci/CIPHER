@@ -55,15 +55,26 @@ EMPTY_ADMIN: dict = {
 
 
 def hash_password(password: str) -> tuple[str, str]:
-    """Genera hash SHA-256 con salt casuale. Ritorna (hashed, salt)."""
+    """Genera hash PBKDF2-SHA256 con salt casuale (600k iterazioni). Ritorna (hashed, salt)."""
     salt = os.urandom(32).hex()
-    hashed = hashlib.sha256((password + salt).encode()).hexdigest()
+    hashed = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), iterations=600_000
+    ).hex()
     return hashed, salt
 
 
 def verify_password(password: str, hashed: str, salt: str) -> bool:
-    """Verifica password contro hash+salt salvati."""
-    return hashlib.sha256((password + salt).encode()).hexdigest() == hashed
+    """Verifica password contro hash+salt salvati.
+    Supporta sia il vecchio formato SHA-256 che il nuovo PBKDF2 (migrazione trasparente)."""
+    # Nuovo formato: PBKDF2-SHA256
+    pbkdf2_hash = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), iterations=600_000
+    ).hex()
+    if pbkdf2_hash == hashed:
+        return True
+    # Fallback: vecchio formato SHA-256 (per compatibilità pre-migrazione)
+    legacy_hash = hashlib.sha256((password + salt).encode()).hexdigest()
+    return legacy_hash == hashed
 
 
 def compute_checksum(data: dict) -> str:
