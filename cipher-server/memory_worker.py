@@ -35,17 +35,17 @@ CONV_DIR            = Config.MEMORY_DIR / "conversations"
 # Numero minimo di messaggi in una sessione per generare un riassunto
 SUMMARY_MIN_MSGS    = 10
 
-_PROMPT = """Sei Cipher. Analizza questo scambio con Simone.
+_PROMPT = """Sei Cipher. Analizza questo scambio con l'utente.
 
 Identifica SOLO le informazioni che vale la pena salvare a lungo termine —
 cose utili da ricordare nelle sessioni future.
 
 Salva:
-- Dati personali di Simone (lavoro, città, progetti, relazioni, salute)
+- Dati personali dell'utente (lavoro, città, progetti, relazioni, salute)
 - Preferenze o abitudini espresse
 - Decisioni importanti prese insieme
 - Contesto su progetti o situazioni in corso
-- Fatti tecnici o info rilevanti condivisi da Simone
+- Fatti tecnici o info rilevanti condivisi dall'utente
 - Momenti emotivamente significativi
 
 NON salvare:
@@ -54,7 +54,7 @@ NON salvare:
 - Semplici domande senza contenuto durevole
 
 Scambio:
-Simone: {user_msg}
+Utente: {user_msg}
 Cipher: {assistant_msg}
 
 Rispondi SOLO con JSON (lista vuota se non c'è niente da salvare):
@@ -64,7 +64,7 @@ Rispondi SOLO con JSON (lista vuota se non c'è niente da salvare):
 Solo JSON, nessuna spiegazione."""
 
 _SUMMARY_PROMPT = """Riassumi questa conversazione in 2-3 frasi concise.
-Includi: argomenti principali trattati, decisioni prese, informazioni importanti su Simone emerse.
+Includi: argomenti principali trattati, decisioni prese, informazioni importanti sull'utente emerse.
 Solo il riassunto, nient'altro.
 
 {messages_text}"""
@@ -164,7 +164,7 @@ def _summarize_session(data: dict, client: OpenAI) -> str:
         return ""  # sessione troppo breve
 
     text = "\n".join(
-        f"{'Simone' if m['role'] == 'user' else 'Cipher'}: {m['content'][:300]}"
+        f"{'Utente' if m['role'] == 'user' else 'Cipher'}: {m['content'][:300]}"
         for m in messages
     )
     summary = _call_llm(

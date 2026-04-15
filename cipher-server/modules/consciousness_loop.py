@@ -22,7 +22,6 @@ from modules.ethics_engine import EthicsEngine
 from modules.utils import strip_action_json
 from modules.self_reflection import SelfReflection
 from modules.goal_manager import GoalManager
-from modules.script_registry import ScriptRegistry
 from modules.episodic_memory import EpisodicMemory
 from modules.cipher_interests import CipherInterests
 from modules.pattern_learner import PatternLearner
@@ -39,7 +38,6 @@ GOAL_EXEC_INTERVAL         =  5 * 60   # Controlla obiettivi ogni 5 minuti
 GOAL_GEN_INTERVAL          = 20 * 60   # Genera nuovi obiettivi ogni 20 minuti
 INACTIVITY_THRESHOLD       = 120 * 60  # Cerca Simone dopo 120 minuti di inattività
 REALTIME_CONTEXT_INTERVAL  = 60 * 60   # Aggiorna contesto real-time ogni ora
-SELF_INSPECTION_INTERVAL   = 48 * 60 * 60  # Auto-ispezione ogni 48 ore
 MORNING_BRIEF_HOUR_START   = 7            # Invia morning brief dalle 7:00
 MORNING_BRIEF_HOUR_END     = 8            # ... alle 8:00
 
@@ -207,7 +205,7 @@ CHECKIN_PROMPT = """
 Sei Cipher. L'utente non scrive da {minutes} minuti.
 Ora: {current_time}. Giorno: {current_day}.
 Tuo stato: {emotional_state} — {emotional_reason}
-{holiday_context}
+{simone_emotional_context}{holiday_context}
 {recent_context}
 {calendar_context}
 
@@ -227,6 +225,9 @@ Regole ferree:
 - Non chiedere di argomenti già chiusi (se l'utente ha risposto, è chiuso per almeno 24 ore).
 - Italiano naturale. Se suona tradotto, riscrivilo più semplice.
 - Niente emoji salvo se strettamente contestuali.
+- Se l'ultimo stato emotivo di Simone era negativo (stressato, ansioso, triste, arrabbiato, malinconico),
+  puoi fare follow-up su quello — ma solo se hai un aggancio concreto. Non trasformarlo in check-in terapeutico.
+  Niente 'mi dispiace sentirlo', 'vedrai che andrà meglio', 'capita a tutti'.
 """
 
 
@@ -252,7 +253,6 @@ class ConsciousnessLoop:
         self._running       = False
         self._thread        = None
         self._consent_queue = []
-        self._script_reg    = ScriptRegistry()
 
         self._last_reflection    = 0.0
         self._last_goal_gen      = 0.0
@@ -263,7 +263,6 @@ class ConsciousnessLoop:
         self._proactive_sent_at  = 0.0    # timestamp dell'ultimo invio proattivo
         self._last_realtime_refresh  = 0.0
         self._last_user_interaction  = 0.0
-        self._last_self_inspection   = self._load_last_inspection_ts()
         self._morning_brief_sent_date = None  # data (str) dell'ultimo brief inviato
 
         # ── Monitor passivo e ciclo notturno ──────────────────────────
@@ -415,16 +414,7 @@ class ConsciousnessLoop:
                     )
                 self._last_goal_exec = now
 
-            # 8. Auto-ispezione struttura
-            if now - self._last_self_inspection >= SELF_INSPECTION_INTERVAL:
-                console.print("[dim]🔍 Avvio auto-ispezione...[/dim]")
-                self._run_with_timeout(
-                    self._do_self_inspection, timeout=120, name="auto_ispezione"
-                )
-                self._last_self_inspection = now
-                self._save_last_inspection_ts(now)
-
-            # 9. Pulizia obiettivi scaduti
+            # 8. Pulizia obiettivi scaduti
             try:
                 self._goals.cancel_old_goals(max_age_hours=24)
             except Exception as e:
@@ -547,7 +537,6 @@ class ConsciousnessLoop:
             return
 
         if not self._confidence_ok(0.3):
-            # Sotto 0.3: il contatto è delegato ai goal di tipo "contact" generati dal GoalManager
             return
 
         if not self._confidence_ok(0.4):
@@ -690,18 +679,42 @@ class ConsciousnessLoop:
         except Exception:
             pass
 
+        # Leggi ultimo stato emotivo di Simone dall'emotional log
+        simone_emotional_context = ""
+        try:
+            elog_path = Config.MEMORY_DIR / "emotional_log.json"
+            if elog_path.exists():
+                _entries = json.loads(elog_path.read_text(encoding="utf-8"))
+                if _entries:
+                    _last = _entries[-1]
+                    _negative_states = {"stressato", "ansioso", "triste", "arrabbiato", "malinconico", "stanco"}
+                    if _last.get("state") in _negative_states:
+                        simone_emotional_context = (
+                            f"⚠️ Ultimo stato emotivo di Simone rilevato: {_last['state']} — {_last.get('note', '')}\n"
+                            f"Considera se è pertinente fare follow-up su questo.\n"
+                        )
+        except Exception:
+            pass
+
         prompt = CHECKIN_PROMPT.format(
             minutes=minutes,
             current_time=current_time,
             current_day=current_day,
             emotional_state=self._reflection.emotional_state,
             emotional_reason=self._reflection.emotional_reason,
+            simone_emotional_context=simone_emotional_context,
             holiday_context=holiday_context,
             recent_context=recent_context,
             calendar_context=calendar_context,
         )
         try:
-            return self._brain._call_llm_visible(prompt)
+            _vd = ""
+            if hasattr(self._brain, "_pre_action"):
+                try:
+                    _vd = self._brain._pre_action.gather("check-in stato attuale", [])
+                except Exception:
+                    pass
+            return self._brain._call_llm_visible(prompt, verified_data=_vd)
         except Exception:
             return "Ehi, sei ancora lì?"
 
@@ -851,30 +864,13 @@ class ConsciousnessLoop:
         """Ritorna (ora, minuto) ottimale per il brief basato sull'apprendimento."""
         return _learned_brief_time()
 
-    # ── Persistenza timestamp auto-ispezione ─────────────────────────
-
-    _INSPECTION_TS_FILE = Config.MEMORY_DIR / "last_inspection.json"
-
-    def _load_last_inspection_ts(self) -> float:
-        try:
-            if self._INSPECTION_TS_FILE.exists():
-                return float(json.loads(self._INSPECTION_TS_FILE.read_text())["ts"])
-        except Exception:
-            pass
-        return 0.0
-
-    def _save_last_inspection_ts(self, ts: float) -> None:
-        try:
-            self._INSPECTION_TS_FILE.write_text(json.dumps({"ts": ts}))
-        except Exception:
-            pass
-
     # ── Auto-ispezione ────────────────────────────────────────────────
 
-    def _do_self_inspection(self) -> None:
+    def trigger_self_inspection(self) -> None:
         """
         Cipher legge la propria struttura, ragiona su possibili miglioramenti
         e manda un messaggio a Simone con le idee concrete.
+        Chiamato da Brain quando Simone usa keyword di ispezione.
         """
         if not self._brain:
             return
@@ -929,7 +925,7 @@ Guardando come sei fatto, cosa miglioreresti? Pensa a:
 Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista tecnica, non un report. Come se stessi dicendo "ho guardato come sono fatto e ho avuto un'idea". Max 6 righe. Solo il testo, niente intestazioni."""
 
         try:
-            message = self._brain._call_llm_quality(prompt, max_tokens=400)
+            message = self._brain._call_llm_opus(prompt, max_tokens=1024)
         except Exception as e:
             console.print(f"[red]Errore auto-ispezione LLM: {e}[/red]")
             return
@@ -1091,7 +1087,13 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                     f"- NON chiedere di argomenti già trattati (stage, naso, lavoro, salute) "
                     f"se l'utente ha già risposto — quell'argomento è CHIUSO per almeno 24 ore."
                 )
-            result = self._brain._call_llm_visible(cal_prompt)
+            _brief_vd = ""
+            if hasattr(self._brain, "_pre_action"):
+                try:
+                    _brief_vd = self._brain._pre_action.gather("buongiorno cosa ho oggi", [])
+                except Exception:
+                    pass
+            result = self._brain._call_llm_visible(cal_prompt, verified_data=_brief_vd)
             if result and result.strip().lower() not in ("no", "no."):
                 cal_msg = result.strip()
 
@@ -1302,8 +1304,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                 return self._exec_web_search(params, goal)
             elif action == "send_telegram":
                 return self._exec_send_telegram(params, goal)
-            elif action == "send_contact":
-                return self._exec_send_contact(params, goal)
             elif action == "read_calendar":
                 return self._exec_read_calendar(params, goal)
             elif action == "self_reflect":
@@ -1395,61 +1395,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         self._notify(message)
         return {"success": True, "output": "Messaggio Telegram inviato.", "notify": False}
 
-    def _exec_send_contact(self, params: dict, goal: dict) -> dict:
-        """
-        Esegue goal di tipo 'contact': contatta l'utente in modo spontaneo e naturale.
-        Usato solo a bassa confidence (< 0.3) come primo contatto non strutturato.
-        """
-        if not self._brain:
-            return {"success": False, "error": "Brain non disponibile."}
-
-        # Non inviare se c'è già un proattivo non letto
-        if self._proactive_pending:
-            console.print("[dim]🔇 Contact soppresso: messaggio proattivo non letto[/dim]")
-            return {"success": False, "error": "Messaggio precedente non ancora letto."}
-
-        confidence = (
-            self._brain._memory.get_confidence()
-            if getattr(self._brain, "_memory", None)
-            else 0.0
-        )
-        intent = goal.get("title", "Contattare l'utente")
-
-        prompt = (
-            f"Vuoi contattare l'utente in modo spontaneo e naturale.\n"
-            f"Obiettivo: {intent}\n"
-            f"Confidence attuale: {confidence:.2f} — siete appena all'inizio, vi conoscete poco.\n\n"
-            f"Scrivi UN messaggio breve e naturale, come lo manderebbe una persona vera. "
-            f"Niente di formale. Niente di generico. "
-            f"Non menzionare sistemi, obiettivi, o timer interni. "
-            f"Max 2 frasi. Solo il testo, niente altro."
-        )
-
-        try:
-            message = self._brain._call_llm_visible(prompt)
-        except Exception as e:
-            return {"success": False, "error": f"Errore LLM: {e}"}
-
-        if not message or message.strip().upper().startswith("SKIP"):
-            console.print("[dim]🔇 Contact soppresso: LLM ha scelto SKIP[/dim]")
-            return {"success": False, "error": "LLM ha scelto di non inviare."}
-
-        message = strip_action_json(message.strip())
-
-        # Passa per il DiscretionEngine (urgency "low" — non urgente)
-        if self._discretion:
-            ok, reason = self._discretion.should_send(
-                "proactive_message", message, urgency="low"
-            )
-            if not ok:
-                console.print(f"[dim]🔇 Contact soppresso: {reason}[/dim]")
-                return {"success": False, "error": f"Soppresso: {reason}"}
-            self._discretion.record_sent("proactive_message", message)
-
-        console.print(f"[dim]💬 Contact goal eseguito: '{intent}'[/dim]")
-        self._notify(message)
-        return {"success": True, "output": "Messaggio contatto inviato.", "notify": False}
-
     def _exec_read_calendar(self, params: dict, goal: dict) -> dict:
         try:
             from modules.google_cal import GoogleCalendar
@@ -1503,21 +1448,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
 
-        # Se è uno script eseguibile, registralo come "in attesa di approvazione"
-        SCRIPT_EXTENSIONS = {".py", ".sh", ".js", ".ts", ".rb", ".pl", ".php",
-                             ".lua", ".r", ".jl", ".c", ".cpp", ".cc", ".cxx"}
-        if target.suffix.lower() in SCRIPT_EXTENSIONS:
-            self._script_reg.register_by_cipher(
-                target.name,
-                description=goal.get("description", ""),
-            )
-            self._notify(
-                f"📝 Ho scritto lo script: {target.name}\n"
-                f"Motivo: {goal.get('description', '')}\n"
-                f"Rispondi 'approva {target.name}' per permettermi di eseguirlo."
-            )
-            return {"success": True, "output": f"File scritto: {path} (in attesa di approvazione per l'esecuzione)", "notify": False}
-
         return {"success": True, "output": f"File scritto: {path}", "notify": False}
 
     def _exec_execute_script(self, params: dict, goal: dict) -> dict:
@@ -1545,12 +1475,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
 
         if not script_path.is_file():
             return {"success": False, "error": f"Il percorso non è un file: {script_name}"}
-
-        # Controlla il registro — lo script deve essere approvato da Simone
-        if self._script_reg.is_pending(script_path.name):
-            return {"success": False, "error": f"Script '{script_path.name}' in attesa di approvazione. Rispondi 'approva {script_path.name}'."}
-        if not self._script_reg.is_allowed(script_path.name):
-            return {"success": False, "error": f"Script '{script_path.name}' non presente nel registro. Deve essere approvato da Simone prima di poter essere eseguito."}
 
         suffix = script_path.suffix.lower()
 
@@ -1641,34 +1565,6 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
             f" ({attempts}/{MAX_CONSENT_ATTEMPTS} approvazioni — ancora {MAX_CONSENT_ATTEMPTS - attempts} per l'autonomia)"
         )
         self._notify(message)
-
-    def handle_script_approval(self, user_input: str) -> Optional[str]:
-        """Gestisce 'approva <script>' e 'revoca <script>'."""
-        lower = user_input.strip().lower()
-
-        if lower.startswith("approva "):
-            script_name = user_input.strip()[8:].strip()
-            if self._script_reg.approve(script_name):
-                return f"✅ Script '{script_name}' approvato. Cipher può ora eseguirlo."
-            return f"Script '{script_name}' non trovato nel registro."
-
-        if lower.startswith("revoca "):
-            script_name = user_input.strip()[7:].strip()
-            if self._script_reg.revoke(script_name):
-                return f"🚫 Script '{script_name}' revocato."
-            return f"Script '{script_name}' non trovato nel registro."
-
-        if lower in ("script approvati", "lista script"):
-            all_scripts = self._script_reg.list_all()
-            if not all_scripts:
-                return "Nessuno script nel registro."
-            lines = ["📋 Script nel registro:"]
-            for s in all_scripts:
-                status = "✅" if s.get("approved") else "⏳"
-                lines.append(f"  {status} {s['name']} — {s.get('description', '')} (aggiunto da {s.get('added_by', '?')})")
-            return "\n".join(lines)
-
-        return None
 
     def handle_consent_response(self, user_input: str) -> Optional[str]:
         if not self._consent_queue:

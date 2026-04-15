@@ -20,6 +20,12 @@ __pycache__/
 *.pyd
 .mypy_cache/
 
+# ── Backup directory ─────────────────────────────────
+cipher-server-backup-*/
+
+# ── Claude Code session state ─────────────────────────
+cipher-server/.claude/
+
 # ── Dati utente e memoria (generati a runtime) ────────
 cipher-server/memory/
 cipher-server/home/

@@ -63,4 +63,11 @@ task_list() | task_remove(id)
 {"action": "gmail_read", "params": {"email_id": "..."}}
 {"action": "gmail_send", "params": {"to": "...", "subject": "...", "body": "..."}}
 
+# Interfaccia web dashboard — SOLO quando source=="web" (utente connesso dalla pagina web, non da Telegram)
+# Usa queste azioni solo se l'utente le richiede esplicitamente o se migliorano la risposta nel contesto UI.
+{"action": "ui_navigate", "params": {"panel": "FS"}}        — apre pannello (CHAT, FS, TERM, EDIT, NOTES, MEM, GOALS, CAL, EMO, LOG)
+{"action": "ui_open_file", "params": {"path": "file.txt"}}  — apre un file nell'editor
+{"action": "ui_terminal", "params": {"cmd": "ls"}}          — esegue un comando nel terminale integrato
+{"action": "ui_note", "params": {"text": "..."}}             — aggiunge testo alle note
+
 # Nota ricerche web: prima controlla la cartella apprendimento. Se non trovi, chiedi all'utente se cercare online. Se salvi conoscenze, di' solo "File salvato."

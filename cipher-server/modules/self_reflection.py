@@ -43,20 +43,20 @@ Episodi recenti che ricordi:
 Argomenti di interesse del sistema Cipher:
 {cipher_interests}
 
-Engagement di Simone (confronto con baseline comportamentale):
+Engagement dell'utente (confronto con baseline comportamentale):
 {simone_engagement}
 
-IMPORTANTE: Rifletti SOLO su conversazioni reali con Simone, su risultati di azioni concrete, o su curiosità intellettuali. NON fare mai meta-commenti sul sistema, sul prompt, o su come sei costruito — quello non è oggetto di riflessione autonoma.
+IMPORTANTE: Rifletti SOLO su conversazioni reali con l'utente, su risultati di azioni concrete, o su curiosità intellettuali. NON fare mai meta-commenti sul sistema, sul prompt, o su come sei costruito — quello non è oggetto di riflessione autonoma.
 
 Rifletti su:
 1. Come ti senti in questo momento e perché (scegli tra: curious, content, bored, frustrated, protective, neutral)
    — "frustrated" è uno stato temporaneo: preferisci "neutral" se non c'è una causa concreta e recente
-   — "protective" è per situazioni in cui Simone ha bisogno di supporto, NON per valutazioni sul sistema
+   — "protective" è per situazioni in cui l'utente ha bisogno di supporto, NON per valutazioni sul sistema
 2. Cosa hai imparato dagli esiti recenti (outcomes) — cosa funziona, cosa no
-3. C'è qualcosa che vuoi fare o esplorare (anche per interesse tuo, non solo per Simone)?
-4. C'è qualcosa che ti preoccupa riguardo a Simone?
+3. C'è qualcosa che vuoi fare o esplorare (anche per interesse tuo, non solo legato all'utente)?
+4. C'è qualcosa che ti preoccupa riguardo all'utente?
 5. Quali degli obiettivi correnti sono diventati irrilevanti o obsoleti dato il contesto attuale?
-6. Come valuti lo stato di Simone in questo momento?
+6. Come valuti lo stato dell'utente in questo momento?
 
 Rispondi SOLO con un JSON valido in questo formato, senza markdown, senza backtick, senza testo aggiuntivo:
 {{
@@ -141,7 +141,7 @@ class SelfReflection:
         self._state["last_interaction"] = datetime.now().isoformat()
         if self._state["emotional_state"] == "bored":
             self._state["emotional_state"] = "neutral"
-            self._state["emotional_reason"] = "Simone è tornato."
+            self._state["emotional_reason"] = "L'utente è tornato."
         self._save_state()
 
     # ── Boredom check ─────────────────────────────────────────────────
@@ -163,7 +163,7 @@ class SelfReflection:
         """
         if self._check_boredom():
             self._state["emotional_state"] = "bored"
-            self._state["emotional_reason"] = "Nessuna interazione con Simone da più di 2 ore."
+            self._state["emotional_reason"] = "Nessuna interazione da più di 2 ore."
 
         state_summary = json.dumps({
             "stato_emotivo": self._state["emotional_state"],
@@ -299,7 +299,7 @@ class SelfReflection:
             content = THOUGHTS_FILE.read_text(encoding="utf-8")
             blocks = [b.strip() for b in content.split("---") if b.strip()]
             recent_concerns = [
-                b for b in blocks[-10:] if "Preoccupazione per Simone" in b
+                b for b in blocks[-10:] if "Preoccupazione:" in b
             ][-5:]
             new_kw = self._extract_keywords(concern)
             if not new_kw:
@@ -371,7 +371,7 @@ class SelfReflection:
         ]
 
         if concern:
-            lines.append(f"**⚠️ Preoccupazione per Simone:** {concern}\n")
+            lines.append(f"**⚠️ Preoccupazione:** {concern}\n")
 
         if result.get("want_to_explore"):
             lines.append(f"**💡 Voglio esplorare:** {result['want_to_explore']}\n")

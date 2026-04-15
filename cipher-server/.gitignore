@@ -4,10 +4,14 @@ data/
 # ── Backup e file temporanei ──────────────────────────────────────────
 *.bak
 *.bak[0-9]
+*.bak.*
 comportamento.bak*/
 memory_backup_*/
 scheduling/
 apprendimento/
+
+# ── Claude Code session state ─────────────────────────────────────────
+.claude/
 
 # ── Variabili d'ambiente e secrets ───────────────────
 .env

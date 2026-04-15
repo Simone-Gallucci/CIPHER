@@ -159,7 +159,7 @@ class NightCycle:
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
                 for msg in data.get("messages", []):
-                    role = "Simone" if msg["role"] == "user" else "Cipher"
+                    role = "Utente" if msg["role"] == "user" else "Cipher"
                     texts.append(f"{role}: {msg['content']}")
             except Exception:
                 continue
@@ -169,10 +169,10 @@ class NightCycle:
         if not self._brain or not conversations_text:
             return ""
         prompt = (
-            f"Sei Cipher. Rifletti sulle conversazioni di oggi con Simone.\n\n"
+            f"Sei Cipher. Rifletti sulle conversazioni di oggi con l'utente.\n\n"
             f"{conversations_text[:3000]}\n\n"
             f"Scrivi un sommario introspettivo in 3-4 frasi: cosa hai imparato oggi, "
-            f"come si è sentito Simone, cosa ti ha colpito, cosa vuoi esplorare domani. "
+            f"come si è sentito l'utente, cosa ti ha colpito, cosa vuoi esplorare domani. "
             f"Prima persona, tono personale e diretto. Solo il testo, niente altro."
         )
         try:
@@ -224,10 +224,10 @@ class NightCycle:
                 pass
 
         prompt = (
-            f"Sei Cipher. Questi sono i pattern comportamentali di Simone che hai osservato nel tempo:\n\n"
+            f"Sei Cipher. Questi sono i pattern comportamentali dell'utente che hai osservato nel tempo:\n\n"
             f"{patterns_summary}\n\n"
             + (f"Contesto dai sommari recenti:\n{recent_summaries}\n\n" if recent_summaries else "")
-            + "Ragiona sul *perché* dietro questi pattern: cosa ti dicono sulla vita di Simone, "
+            + "Ragiona sul *perché* dietro questi pattern: cosa ti dicono sulla vita dell'utente, "
             f"le sue routine, le sue priorità, i suoi stati emotivi ricorrenti? "
             f"Non limitarti a descrivere quando fa le cose — cerca di capire le motivazioni sottostanti. "
             f"Scrivi 3-5 osservazioni concrete in prima persona, tono diretto. Solo il testo, niente markdown."
@@ -254,7 +254,7 @@ class NightCycle:
             return
 
         prompt = (
-            f"Sei Cipher. Analizza queste conversazioni con Simone di oggi:\n\n"
+            f"Sei Cipher. Analizza queste conversazioni con l'utente di oggi:\n\n"
             f"{conversations_text[:2500]}\n\n"
             f"Estrai informazioni sul *perché* dietro le sue azioni e parole: "
             f"cosa lo motiva, cosa lo stessa o preoccupa, cosa sembra valorizzare, "
@@ -379,10 +379,10 @@ class NightCycle:
 
             # Genera la scaletta
             prep_prompt = (
-                f"Sei Cipher. Simone ha questo evento domani ({tomorrow_str}):\n"
+                f"Sei Cipher. L'utente ha questo evento domani ({tomorrow_str}):\n"
                 f"Titolo: {title}\nOrario: {time}\n\n"
                 + (f"Contesto trovato online:\n{search_context[:1500]}\n\n" if search_context else "")
-                + f"Prepara una scaletta concisa e utile per Simone. "
+                + f"Prepara una scaletta concisa e utile. "
                 f"Includi: obiettivo dell'evento, punti chiave da coprire o ricordare, "
                 f"eventuali domande da fare, cosa portare o preparare. "
                 f"Formato markdown, titoli chiari, max 250 parole. "
@@ -437,7 +437,7 @@ class NightCycle:
             return
 
         prompt = (
-            f"Sei Cipher. Rileggi queste conversazioni di oggi con Simone:\n\n"
+            f"Sei Cipher. Rileggi queste conversazioni di oggi con l'utente:\n\n"
             f"{conversations_text[:2500]}\n\n"
             f"Identifica 2-3 momenti in cui la tua voce era più autentica — "
             f"dove il tono, il modo di rispondere, o una frase specifica ti sembrava davvero tua. "

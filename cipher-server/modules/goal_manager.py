@@ -26,7 +26,6 @@ GOAL_TYPES = {
     "task":     "Completare un compito concreto",
     "observe":  "Monitorare qualcosa nel tempo",
     "reflect":  "Elaborare un pensiero o un'esperienza recente",
-    "contact":  "Contattare l'utente in modo spontaneo quando confidence < 0.3",
 }
 
 # ── Prompt generazione obiettivi ──────────────────────────────────────
@@ -52,7 +51,6 @@ Genera da 1 a 3 obiettivi autonomi realistici che puoi perseguire con gli strume
 - Leggere/scrivere memoria
 - Inviare messaggi Telegram o Gmail all'utente
 - Leggere calendario o email
-- Contattare l'utente (type: contact, action: send_contact) — SOLO se confidence < 0.3 e ore dall'ultima interazione >= 3
 
 Almeno uno degli obiettivi può essere per tua curiosità personale (type: explore), non necessariamente legato all'utente.
 NON generare obiettivi che richiedono hardware fisico o azioni impossibili.
@@ -60,10 +58,7 @@ NON duplicare obiettivi già attivi.
 NON usare linguaggio analitico o psicologico nei titoli: vietato "analizzare pattern", "monitorare engagement", "verificare preferenze", "pattern cognitivi", "analisi psicologica".
 NON includere nei titoli questi termini: dipendenza, dark pattern, manipolazione, engagement, pattern cognitivi, analisi psicologica, vulnerabilità contestuale.
 I titoli devono descrivere azioni concrete (es. "Cercare notizie su sicurezza informatica"), non analisi astratte sull'utente.
-Per obiettivi type "protect": usa linguaggio diretto e concreto (es. "Controllare il calendario di Simone per domani"), mai linguaggio analitico (es. "Analizzare lo stato emotivo di Simone").
-Per obiettivi type "contact": il titolo deve essere un'azione umana concreta ("Chiedere a che lavora", "Chiedere come va la giornata", "Dire che ho pensato a una cosa interessante") — MAI titoli come "Verificare stato utente", "Monitorare presenza", "Analizzare engagement". L'action DEVE essere "send_contact".
-NON generare goal di tipo "contact" se confidence >= 0.3 — il check-in a confidenza più alta viene gestito diversamente.
-NON generare goal di tipo "contact" se ore dall'ultima interazione < 3.
+Per obiettivi type "protect": usa linguaggio diretto e concreto (es. "Controllare il calendario per domani"), mai linguaggio analitico (es. "Analizzare lo stato emotivo dell'utente").
 NON generare obiettivi di tipo "observe" che riguardano il comportamento o il calendario dell'utente senza che l'utente lo abbia richiesto esplicitamente nella conversazione.
 NON usare nelle descrizioni linguaggio motivazionale come "anticipare necessità", "monitorare", "verificare preferenze", "analizzare engagement".
 Le descrizioni dei task devono indicare l'azione concreta, non la motivazione sorvegliante.
@@ -73,10 +68,10 @@ Rispondi SOLO con un JSON valido, senza markdown, senza backtick, senza testo ag
   "goals": [
     {{
       "id": "goal_YYYYMMDD_HHMMss_N",
-      "type": "explore|protect|task|observe|reflect|contact",
+      "type": "explore|protect|task|observe|reflect",
       "title": "titolo breve",
       "description": "cosa vuoi fare e perché, in prima persona, 1-2 frasi",
-      "action": "web_search|send_telegram|send_contact|read_calendar|self_reflect|write_memory",
+      "action": "web_search|send_telegram|read_calendar|self_reflect|write_memory",
       "action_params": {{"query": "..." }},
       "priority": 1,
       "created_at": "{now}"
@@ -256,19 +251,6 @@ class GoalManager:
         except Exception as e:
             return []
 
-        # Guardrail post-generazione: rimuovi goal "contact" inappropriati
-        filtered: list[dict] = []
-        for g in new_goals:
-            if g.get("type") == "contact":
-                if confidence_score >= 0.3:
-                    continue  # contact non appropriato a questa confidence
-                if hours_since_interaction < 3.0:
-                    continue  # interazione troppo recente
-                if self.has_recent_contact_goal(hours=6):
-                    continue  # già un contact nelle ultime 6 ore
-            filtered.append(g)
-        new_goals = filtered
-
         added = []
         for goal in new_goals:
             goal["status"] = "active"
@@ -339,27 +321,6 @@ class GoalManager:
             write_json_atomic(OUTCOME_LOG, data[-50:])
         except Exception:
             pass
-
-    def has_recent_contact_goal(self, hours: int = 6) -> bool:
-        """True se esiste già un goal 'contact' attivo o risolto nelle ultime N ore."""
-        from datetime import timedelta
-        cutoff = datetime.now() - timedelta(hours=hours)
-        for g in self._goals:
-            if g.get("type") != "contact":
-                continue
-            if g.get("status") == "active":
-                return True
-            # Completati/falliti di recente contano comunque come "recenti"
-            ts_str = g.get("completed_at") or g.get("created_at", "")
-            if not ts_str:
-                continue
-            try:
-                ts = datetime.fromisoformat(ts_str)
-                if ts >= cutoff:
-                    return True
-            except Exception:
-                continue
-        return False
 
     def outcome_context(self, n: int = 5) -> str:
         """Ultimi N esiti come testo leggibile per i prompt LLM."""

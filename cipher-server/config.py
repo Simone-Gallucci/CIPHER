@@ -72,6 +72,10 @@ class Config:
     _conv_model_raw: str    = os.getenv("CONVERSATION_MODEL", "claude-haiku-4-5-20251001" if _provider == "anthropic" else "anthropic/claude-haiku-4-5")
     CONVERSATION_MODEL: str = _conv_model_raw.replace("anthropic/", "") if _provider == "anthropic" else _conv_model_raw
 
+    # ── Modello Opus per auto-ispezione approfondita (keyword-triggered) ──
+    _opus_model_raw: str = os.getenv("OPUS_MODEL", "claude-opus-4-6" if _provider == "anthropic" else "anthropic/claude-opus-4-6")
+    OPUS_MODEL: str = _opus_model_raw.replace("anthropic/", "") if _provider == "anthropic" else _opus_model_raw
+
     # ── API Auth ──────────────────────────────────────────
     # Token per autenticare le richieste all'API Flask.
     # Se vuoto → auth disabilitata (utile per ambienti interni).

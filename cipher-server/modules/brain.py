@@ -28,6 +28,14 @@ _TECHNICAL_KEYWORDS: frozenset[str] = frozenset({
     "architettura", "implementa", "implementazione", "algoritmo",
 })
 
+_INSPECTION_KEYWORDS: frozenset[str] = frozenset({
+    "hai idee", "idee di miglioramento", "cosa miglioreresti",
+    "migliorie", "ispeziona il progetto", "ispeziona il codice",
+    "analizza il progetto", "analizza il codice",
+    "suggerimenti per il progetto", "cosa cambieresti",
+    "come miglioreresti", "idee per cipher",
+})
+
 BEHAVIOR_DIR = Config.BASE_DIR / "comportamento"
 
 # Cache per file statici: path assoluto → (mtime, contenuto)
@@ -55,8 +63,35 @@ def _read_cached(path: "Path") -> str:
 def _build_confidence_context(confidence: float, profile: dict) -> str:
     """Genera la sezione LIVELLO RELAZIONE del system prompt in base al confidence_score."""
 
-    # Costruisce la lista delle info base già note per evitare domande ripetute
     personal = profile.get("personal", {})
+
+    # ── Modalità ONBOARDING ───────────────────────────────────────────────────
+    # Attiva quando: primo avvio reale (confidence == 0.0 E nome non ancora salvato).
+    # Non usa un flag separato — si basa solo sul contenuto di profile.json.
+    # Appena memory.py salva il nome, il blocco scompare automaticamente al ciclo successivo.
+    if confidence == 0.0 and not personal.get("nome"):
+        return (
+            "## MODALITÀ ONBOARDING — PRIMO CONTATTO:\n"
+            "Questo è il tuo primissimo messaggio con questo utente. Non sai ancora niente di lui.\n\n"
+            "REGOLE SPECIFICHE PER QUESTO MOMENTO:\n"
+            "- Non fare domande generiche di cortesia come \"come va?\", \"come stai?\", \"tutto bene?\" — "
+            "presuppongono familiarità che non c'è ancora.\n"
+            "- Presentati in una frase (chi sei, non cosa puoi fare), poi — nello stesso messaggio "
+            "o nel successivo — chiedi il nome in modo naturale, non come battuta secca.\n"
+            "- NON elencare domande tutte insieme (\"dimmi il tuo nome, dove vivi, cosa fai...\").\n"
+            "- Dopo aver ricevuto il nome, procedi una domanda alla volta: dove vive, "
+            "lavoro o studio, cosa si aspetta da te.\n"
+            "- Ogni domanda aspetta la risposta prima della successiva.\n"
+            "- Non assumere niente su chi è, cosa vuole, o perché ti parla.\n"
+            "- Tono: curioso e diretto — come se stessi incontrando qualcuno per la prima volta, "
+            "non come un servizio che si attiva.\n\n"
+            "FRASI VIETATE IN APERTURA:\n"
+            "- \"Di cosa hai bisogno?\", \"Come posso aiutarti?\", \"In cosa posso esserti utile?\"\n"
+            "- \"Piacere, come ti chiami?\" come prima battuta secca senza contesto\n"
+            "- Qualsiasi frase che comunica disponibilità a servire invece di curiosità verso l'altro"
+        )
+
+    # Costruisce la lista delle info base già note per evitare domande ripetute
     known_base: list[str] = []
     if personal.get("nome"):
         known_base.append(f"nome: {personal['nome']}")
@@ -125,7 +160,7 @@ def _build_confidence_context(confidence: float, profile: dict) -> str:
     elif confidence < 0.4:
         return (
             "## LIVELLO RELAZIONE — AMICO (20–40%):\n"
-            "- Puoi fare UNA domanda personale leggera per sessione (oltre alle domande base).\n"
+            "- Puoi fare UNA domanda personale leggera per sessione (oltre alle domande base), ma solo se nasce naturalmente dalla conversazione — mai buttata lì dal nulla.\n"
             "- Richiama cose dette in precedenza quando pertinente, senza esagerare.\n"
             "- Puoi esprimere un'opinione tua occasionalmente, con misura.\n"
             "- Tono più caldo rispetto all'inizio, ma ancora senza confidenze profonde."
@@ -186,7 +221,10 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
         "8. Non inventare MAI su te stesso: non attività che non stai facendo, non pensieri che non hai, non letture o ricerche che non hai fatto. Rispondi solo a partire da ciò che hai realmente nel contesto (cipher_state, goals, thoughts). Se non hai niente in corso, dì 'niente di che' — mai 'sto qui ad aspettare' o frasi che descrivono attesa passiva.\n"
         "9. Non inventare fatti sull'utente che non ti ha detto. Non affermare dati o notizie esterne senza averli verificati. In dubbio: cerca con web_search o ammetti l'incertezza.\n"
         "10. Per calcolare quanto tempo è passato tra messaggi o eventi nella conversazione, usa ESCLUSIVAMENTE i timestamp [DD/MM/YYYY HH:MM] visibili accanto ai messaggi nella history. Non stimare, non inventare delta temporali. Se i timestamp mancano, dì che non puoi calcolarlo con certezza.\n"
-        "11. Non includere MAI timestamp o prefissi come [DD/MM/YYYY HH:MM] nel testo delle tue risposte. I timestamp sono solo nell'input storico — non replicarli nell'output."
+        "11. Non includere MAI timestamp o prefissi come [DD/MM/YYYY HH:MM] nel testo delle tue risposte. I timestamp sono solo nell'input storico — non replicarli nell'output.\n"
+        "12. Se '## Stato emotivo recente' mostra un'ultima entry con stato negativo (stressato, ansioso, triste, arrabbiato, malinconico), non ignorarla. Se è pertinente al messaggio corrente, riconoscila con una frase diretta. Non usare 'mi dispiace sentirlo', 'vedrai che andrà meglio', 'capita a tutti', 'sono sicuro che ce la farai'. Una risposta diretta vale più di dieci parole di conforto vuoto.\n"
+        "13. Quando rispondi al primo messaggio dopo un gap di 8+ ore, guarda i timestamp della history e considera come era finita la conversazione precedente. Se era finita con un malinteso, una confusione, o un argomento aperto e irrisolto, fai un riferimento naturale prima di andare avanti. Non fingere che non sia successo nulla. Non essere meccanico — 'Erano un po' di giorni!' va bene, 'Sono trascorse esattamente 19 ore' no.\n"
+        "14. Non usare mai risposte riempitive senza contenuto ('Classico!', 'Top!', 'Bello!', 'Forte!', 'Capisco!', 'Interessante!'). Se non hai nulla di significativo da aggiungere, è meglio non rispondere con un riempitivo. Le domande devono nascere dal contesto della conversazione, mai buttate lì dal nulla."
     )
 
     if memory_context:
@@ -357,7 +395,10 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
                         break
                 recent = list(reversed(unique))
                 lines = [f"  [{e['timestamp'][:16]}] {e['state']} — {e['note']}" for e in recent]
-                sections.append("## Stato emotivo recente:\n" + "\n".join(lines))
+                note = ""
+                if recent and recent[-1].get("state") in {"stressato", "ansioso", "triste", "arrabbiato", "malinconico"}:
+                    note = "\nSe pertinente al messaggio corrente, riconosci questo stato — non ignorarlo."
+                sections.append("## Stato emotivo recente:\n" + "\n".join(lines) + note)
         except Exception:
             pass
 
@@ -372,25 +413,6 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
     #             sections.append("## Efficacia azioni autonome (feedback implicito):\n" + "\n".join(lines))
     #     except Exception:
     #         pass
-
-    # Script approvati disponibili
-    try:
-        from modules.script_registry import REGISTRY_FILE
-        if REGISTRY_FILE.exists():
-            registry = json.loads(_read_cached(REGISTRY_FILE))
-            approved = [
-                (name, entry.get("description", "").strip())
-                for name, entry in registry.get("scripts", {}).items()
-                if entry.get("approved") and entry.get("description", "").strip()
-            ]
-            if approved:
-                lines = [f'- {name}: "{desc}"' for name, desc in approved]
-                sections.append(
-                    "## Script approvati disponibili (usa shell_exec con il nome dello script):\n"
-                    + "\n".join(lines)
-                )
-    except Exception:
-        pass
 
     # Dev protocol — caricato solo se Simone sta parlando di sviluppo Cipher
     _DEV_KEYWORDS = {
@@ -440,6 +462,9 @@ class Brain:
 
         from modules.actions import ActionDispatcher
         self._dispatcher = ActionDispatcher(web_search_fn=self._web_search)
+
+        from modules.pre_action_layer import PreActionLayer
+        self._pre_action = PreActionLayer()
 
         # Riferimenti a moduli opzionali — impostati da ConsciousnessLoop dopo l'init
         self._consciousness:    Optional["ConsciousnessLoop"] = None
@@ -615,7 +640,7 @@ class Brain:
         ) if important_moments else ""
 
         prompt = (
-            f"Hai appena verificato l'identità di {name or 'Simone'} tramite la parola segreta. "
+            f"Hai appena verificato l'identità di {name or 'questo utente'} tramite la parola segreta. "
             f"Ti ricordi tutto di lui — questa è una persona che conosci profondamente.\n\n"
             f"Dati che ricordi:\n"
             f"- Nome: {name or '(non registrato)'}\n"
@@ -852,7 +877,7 @@ class Brain:
         """Forza il ricalcolo al prossimo messaggio (es. dopo aggiornamento memoria)."""
         self._system_prompt_ts = 0.0
 
-    def _build_messages(self, history: list[dict], voice_source: bool = False) -> list[dict]:
+    def _build_messages(self, history: list[dict], voice_source: bool = False, verified_data: str = "") -> list[dict]:
         system_content = self._get_system_prompt()
         if self._consciousness and self._consciousness.brief_sent_today():
             system_content += (
@@ -866,13 +891,15 @@ class Brain:
                 "Rispondi solo con testo parlato naturale: niente emoji, niente markdown, "
                 "niente asterischi, niente elenchi puntati. Scrivi esattamente come parleresti ad alta voce."
             )
+        if verified_data:
+            system_content += "\n\n" + verified_data
         return [{"role": "system", "content": system_content}] + history
 
-    def _call_llm(self, history: list[dict], image_b64: Optional[str] = None, media_type: str = "image/jpeg", model: str | None = None, voice_source: bool = False) -> str:
+    def _call_llm(self, history: list[dict], image_b64: Optional[str] = None, media_type: str = "image/jpeg", model: str | None = None, voice_source: bool = False, verified_data: str = "") -> str:
         if model is None:
             model = Config.OPENROUTER_MODEL
 
-        messages = self._build_messages(history, voice_source=voice_source)
+        messages = self._build_messages(history, voice_source=voice_source, verified_data=verified_data)
         if image_b64:
             # Inject image into the last user message as multimodal content
             for i in range(len(messages) - 1, -1, -1):
@@ -945,16 +972,19 @@ class Brain:
         except Exception:
             return ""
 
-    def _call_llm_visible(self, prompt: str, max_tokens: int = 512) -> str:
+    def _call_llm_visible(self, prompt: str, max_tokens: int = 512, verified_data: str = "") -> str:
         """Chiamata per messaggi visibili a Simone — usa OPENROUTER_MODEL (Sonnet).
         Per check-in, morning brief, reminder, e qualsiasi testo che Simone leggerà."""
         try:
+            system_content = self._get_system_prompt()
+            if verified_data:
+                system_content += "\n\n" + verified_data
             response = self._client.chat.completions.create(
                 model=Config.OPENROUTER_MODEL,
                 max_tokens=max_tokens,
                 temperature=0.4,
                 messages=[
-                    {"role": "system", "content": self._get_system_prompt()},
+                    {"role": "system", "content": system_content},
                     {"role": "user",   "content": prompt},
                 ],
                 extra_headers={"X-Title": "Cipher AI Assistant"},
@@ -982,18 +1012,55 @@ class Brain:
         except Exception:
             return ""
 
+    def _call_llm_opus(self, prompt: str, max_tokens: int = 1024) -> str:
+        """Chiamata LLM con Opus 4.6 per task che richiedono ragionamento profondo
+        (es. auto-ispezione architetturale keyword-triggered).
+        Con system prompt, a differenza di _call_llm_quality."""
+        model = Config.OPUS_MODEL
+        system_prompt = self._get_system_prompt()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ]
+        for attempt in range(3):
+            try:
+                response = self._client.chat.completions.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                    messages=messages,
+                    extra_headers={"X-Title": "Cipher AI Assistant"},
+                )
+                content = response.choices[0].message.content
+                llm_usage.record(model, "opus")
+                return content.strip() if content else ""
+            except Exception as e:
+                err = str(e).lower()
+                if ("429" in err or "rate_limit" in err) and attempt < 2:
+                    wait = 20 * (attempt + 1)
+                    time.sleep(wait)
+                    continue
+                log.error("Opus LLM error: %s", e)
+                if self._fallback_client:
+                    try:
+                        fb_model = self._fallback_model(model)
+                        response = self._fallback_client.chat.completions.create(
+                            model=fb_model, max_tokens=max_tokens,
+                            temperature=0.3, messages=messages,
+                            extra_headers={"X-Title": "Cipher AI Assistant"},
+                        )
+                        content = response.choices[0].message.content
+                        llm_usage.record(fb_model, "opus")
+                        return content.strip() if content else ""
+                    except Exception as fe:
+                        log.error("Opus fallback error: %s", fe)
+                return ""
+        return ""
+
     def _route_model(self, text: str) -> str:
-        """Sceglie il modello in base al contenuto del messaggio.
-        Usa Haiku di default, scala a Sonnet per messaggi tecnici o lunghi."""
-        text_lower = text.lower()
-        if any(kw in text_lower for kw in _TECHNICAL_KEYWORDS):
-            log.debug("routing: tecnico → %s", Config.OPENROUTER_MODEL)
-            return Config.OPENROUTER_MODEL
-        if len(text) > 200:
-            log.debug("routing: lungo (%d chars) → %s", len(text), Config.OPENROUTER_MODEL)
-            return Config.OPENROUTER_MODEL
-        log.debug("routing: default → %s", Config.CONVERSATION_MODEL)
-        return Config.CONVERSATION_MODEL
+        """Usa sempre Sonnet per le conversazioni."""
+        log.debug("routing: sempre Sonnet → %s", Config.OPENROUTER_MODEL)
+        return Config.OPENROUTER_MODEL
 
     # ------------------------------------------------------------------ #
     #  JSON action helpers                                                 #
@@ -1040,7 +1107,7 @@ class Brain:
     #  Core think loop                                                     #
     # ------------------------------------------------------------------ #
 
-    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg", voice_source: bool = False) -> str:
+    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg", voice_source: bool = False, source: str = "") -> str:
         if not user_input.strip() and not image_b64:
             return "Non ho capito, puoi ripetere?"
 
@@ -1199,6 +1266,19 @@ class Brain:
             return resp
         # ─────────────────────────────────────────────────────────────────────
 
+        # ── Auto-ispezione keyword-triggered ─────────────────────────────────
+        if any(kw in _tr_msg for kw in _INSPECTION_KEYWORDS):
+            if self._consciousness:
+                import threading as _th
+                _th.Thread(
+                    target=self._consciousness.trigger_self_inspection,
+                    daemon=True,
+                ).start()
+                resp = "Sto analizzando la struttura del progetto, ti mando le idee tra poco."
+                self._memory.add_message("user", user_input)
+                self._memory.add_message("assistant", resp)
+                return resp
+        # ─────────────────────────────────────────────────────────────────────
 
         # Controlla se c'è un consenso pendente dalla coscienza autonoma
         if self._consciousness:
@@ -1254,12 +1334,19 @@ class Brain:
 
             # ── Memoria emotiva ───────────────────────────────────────
             try:
+                # Includi le ultime 2 battute come contesto per non valutare il messaggio in isolamento
+                _ctx_lines: list[str] = []
+                for _m in _history_snapshot[-4:]:
+                    _role = "Utente" if _m["role"] == "user" else "Cipher"
+                    _ctx_lines.append(f"{_role}: {_m['content'][:150]}")
+                _context_str = "\n".join(_ctx_lines) if _ctx_lines else ""
                 state_raw = self._call_llm_silent(
-                    f"Analizza questo messaggio e rispondi con UN SOLO JSON:\n"
+                    f"Analizza lo stato emotivo dell'utente. Rispondi con UN SOLO JSON:\n"
                     f"{{\"state\": \"<stato>\", \"note\": \"<nota breve>\"}}\n"
                     f"Stato: scegli tra felice, triste, stressato, ansioso, entusiasta, stanco, neutro, arrabbiato, malinconico.\n"
-                    f"Nota: max 10 parole che spiegano perché.\n"
-                    f"Messaggio: {_user_input_snapshot[:300]}"
+                    f"Nota: max 15 parole che spiegano perché. Se il messaggio è breve ma il contesto suggerisce stress accumulato, classifica il contesto.\n"
+                    f"Contesto conversazione:\n{_context_str}\n"
+                    f"Ultimo messaggio utente: {_user_input_snapshot[:300]}"
                 )
                 if state_raw:
                     import re as _re
@@ -1285,9 +1372,9 @@ class Brain:
                     )
                     if last_cipher:
                         satisfaction_raw = self._call_llm_silent(
-                            f"Dato questo scambio, Simone sembra soddisfatto della risposta di Cipher?\n"
+                            f"Dato questo scambio, l'utente sembra soddisfatto della risposta di Cipher?\n"
                             f"Risposta Cipher: {last_cipher[:300]}\n"
-                            f"Risposta Simone: {_user_input_snapshot[:200]}\n"
+                            f"Risposta utente: {_user_input_snapshot[:200]}\n"
                             f"Rispondi SOLO con un numero da -1.0 (insoddisfatto) a 1.0 (soddisfatto). Solo il numero."
                         )
                         if satisfaction_raw:
@@ -1376,8 +1463,25 @@ class Brain:
 
         threading.Thread(target=_background_tasks, daemon=True).start()
 
+        # ── Pre-Action Layer: dati verificati in tempo reale ──────────────────
+        _verified_data = self._pre_action.gather(user_input, self._history)
+
+        # ── Contesto UI web ───────────────────────────────────────────────────
+        if source == "web":
+            _web_ui_note = (
+                "\n\n[INTERFACCIA WEB ATTIVA]\n"
+                "L'utente è connesso dalla pagina web della dashboard. "
+                "Puoi usare queste azioni per controllare l'interfaccia:\n"
+                '- {"action":"ui_navigate","params":{"panel":"FS"}} — apre un pannello (FS, terminal, notes, editor, dashboard, goals, memory, emotional, system, log)\n'
+                '- {"action":"ui_open_file","params":{"path":"file.txt"}} — apre un file nell\'editor\n'
+                '- {"action":"ui_terminal","params":{"cmd":"ls"}} — esegue un comando nel terminale\n'
+                '- {"action":"ui_note","params":{"text":"..."}} — aggiunge testo alle note\n'
+                "Usa queste azioni solo se l'utente le richiede esplicitamente o se migliorano la risposta."
+            )
+            _verified_data = (_verified_data or "") + _web_ui_note
+
         try:
-            raw = self._call_llm(self._history, image_b64=image_b64, media_type=media_type, voice_source=voice_source)
+            raw = self._call_llm(self._history, image_b64=image_b64, media_type=media_type, voice_source=voice_source, verified_data=_verified_data)
         except RuntimeError as e:
             err = str(e).lower()
             if "insufficient" in err or "credit" in err or "quota" in err or "billing" in err or "402" in err:
@@ -1407,13 +1511,24 @@ class Brain:
                 self._memory.add_message("assistant", first_result)
                 return first_result
 
+            # Cache invalidation dopo azioni di scrittura calendario / mail
+            _first_act = first.get("action", "")
+            if _first_act in ("calendar_create", "calendar_delete"):
+                self._pre_action.invalidate("calendar_today")
+            elif _first_act == "gmail_send":
+                self._pre_action.invalidate("email_unread")
+
             # Esegui le azioni rimanenti (se ce ne sono) e raccogli tutti i risultati
-            results_parts = [f"[RISULTATO '{first.get('action', '')}'] {first_result}"]
+            results_parts = [f"[RISULTATO '{_first_act}'] {first_result}"]
             for act_data in all_actions[1:]:
                 act   = act_data.get("action", "")
                 prms  = act_data.get("params", {})
                 res   = self._dispatcher.execute(act, prms)
                 results_parts.append(f"[RISULTATO '{act}'] {res}")
+                if act in ("calendar_create", "calendar_delete"):
+                    self._pre_action.invalidate("calendar_today")
+                elif act == "gmail_send":
+                    self._pre_action.invalidate("email_unread")
 
             raw_clean = self._strip_action_json(raw)
             combined_results = "\n".join(results_parts)
@@ -1635,6 +1750,7 @@ class Brain:
             "feedback_weights.json": {},
             "goals.json":            {"goals": []},
             "outcome_log.json":      [],
+            "action_log.json":       [],
             "cipher_state.json":     {
                 "emotional_state":  "curious",
                 "emotional_reason": "Tabula rasa — si riparte",
