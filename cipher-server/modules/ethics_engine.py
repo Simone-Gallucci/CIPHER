@@ -59,11 +59,15 @@ ACTION_LEVELS: dict[str, int] = {
 }
 
 # ── Azioni che non possono mai essere apprese (richiedono SEMPRE conferma) ──
+# SECURITY-STEP1: shell_exec aggiunto — esecuzione arbitraria di comandi
+# non deve mai diventare autonoma, indipendentemente dal numero di
+# approvazioni precedenti.
 NEVER_LEARN: frozenset[str] = frozenset({
     "gmail_list",
     "gmail_read",
     "gmail_send",
     "gmail_search",
+    "shell_exec",
 })
 
 # Messaggio etico per ogni blocco livello 3

@@ -15,6 +15,7 @@ from rich.console import Console
 from config import Config
 from modules.brain import Brain
 from modules.listener import Listener
+from modules.shell_guard import get_shell_guard  # SECURITY-STEP1
 from modules.voice import Voice
 
 # ── Endpoint pubblici (non richiedono auth) ───────────────────────────────
@@ -670,15 +671,8 @@ def files_mkdir():
 
 
 # ── Terminal endpoint ──────────────────────────────────────────────────────
-_TERMINAL_BLOCKED = (
-    "sudo", "systemctl", "shutdown", "reboot", "init ",
-    "rm -rf /", "rm -fr /", "> /dev/", "mkfs", "dd if=",
-    "bash -c", "sh -c", "zsh -c", ":(){", "fork bomb",
-    "nc -l", "ncat ", "chmod 777 /", "chown root",
-    "python -c", "python3 -c", "perl -e", "ruby -e",
-    "wget http", "curl http",
-)
-
+# SECURITY-STEP1: _TERMINAL_BLOCKED rimossa (blocklist bypassabile con
+# separatori, backtick, $()). Sostituita da whitelist in shell_guard.py.
 
 _TERMINAL_HELP = """\
 Cipher restricted shell — cwd: home/
@@ -694,12 +688,11 @@ COMANDI FILE E CARTELLE
   head -n N file         prime N righe
   tail -n N file         ultime N righe
   touch file             crea file vuoto (o aggiorna data)
-  nano file              apre il file nell'editor
   mkdir nome             crea cartella
   rm -r nome             elimina file o cartella (anche non vuota)
   mv src dst             sposta o rinomina
   cp src dst             copia
-  find . -name "*.txt"   cerca file per nome
+  find . -name "*.txt"   cerca file per nome (senza -exec)
   du -sh *               dimensione di file e cartelle
   stat file              info dettagliate su un file
 
@@ -710,49 +703,42 @@ TESTO E RICERCA
   sort file              ordina righe
   uniq file              rimuove duplicati
 
-SCRIPT
-  python3 script.py      esegui script Python
-  bash script.sh         esegui script bash
-  ./script.sh            esegui script direttamente
-  chmod +x script.sh     rendi script eseguibile
+PIPE
+  cmd1 | cmd2            passa output di cmd1 a cmd2
 
 UTILITY
   echo "testo"           stampa testo
   date                   data e ora corrente
   whoami                 utente corrente
   df -h                  spazio disco
-  env                    variabili d'ambiente
-  clear / cls            pulisce il terminale
 
-PIPE E REDIRECT
-  cmd1 | cmd2            passa output di cmd1 a cmd2
-  cmd > file             scrive output in file (sovrascrive)
-  cmd >> file            aggiunge output in fondo al file
-
-BLOCCATI (sicurezza)
-  sudo, systemctl, shutdown, reboot
-  rm -rf /  (path di sistema)
-  wget, curl, nc, ncat  (rete)
-  python3 -c, bash -c   (esecuzione inline)
-  mkfs, dd if=          (operazioni disco)
+SICUREZZA (whitelist — non blocklist)
+  Binari consentiti: ls, cat, head, tail, grep, find, du, df, stat, wc,
+    sort, uniq, pwd, echo, date, whoami, file, diff, which, type, hash,
+    touch, mkdir, rm, mv, cp, chmod
+  Redirect (> >> <), chaining (; && || &), backtick, $() bloccati
+  Tutti i path validati contro home/ — nessun accesso esterno
+  Env isolato: solo HOME, PATH, LANG, TERM (nessun secret)
 
 LIMITI
-  timeout: 10 secondi — output max: 50 KB
+  timeout: 10 secondi — output max: 50 KB — comando max: 500 caratteri
   working dir: home/ — cd non può uscire da home/
 """
 
 
 @app.route("/api/terminal", methods=["POST"])
 def terminal_run():
+    # SECURITY-STEP1: endpoint riscritto per usare ShellGuard.
+    # Rimossi: subprocess.run(shell=True), _TERMINAL_BLOCKED, {**os.environ}.
     try:
         data = request.get_json(silent=True) or {}
         cmd = data.get("cmd", "").strip()
         if not cmd:
             return jsonify({"error": "comando vuoto"}), 400
-        if cmd in ("help",):
+        if cmd == "help":
             return jsonify({"output": _TERMINAL_HELP, "exit_code": 0})
 
-        root = _files_root()  # già risolto da _files_root()
+        root = _files_root()
 
         # Risolvi cwd inviato dal client (relativo a root)
         client_cwd = data.get("cwd", "").strip().lstrip("/")
@@ -762,14 +748,14 @@ def terminal_run():
         else:
             cwd = root
 
-        def _rel(p):
+        def _rel(p: Path) -> str:
             try:
                 r = str(p.relative_to(root))
                 return "" if r == "." else r
             except Exception:
                 return ""
 
-        # Gestisci cd lato server
+        # Gestisci cd lato server (non richiede subprocess)
         if cmd == "cd" or cmd.startswith("cd "):
             parts = cmd.split(None, 1)
             target_rel = parts[1].strip() if len(parts) > 1 else ""
@@ -782,21 +768,18 @@ def terminal_run():
                 return jsonify({"output": f"cd: {target_rel}: cartella non trovata", "exit_code": 1, "cwd": _rel(cwd)})
             return jsonify({"output": "", "exit_code": 0, "cwd": _rel(new_cwd)})
 
-        cmd_lower = cmd.lower()
-        for blocked in _TERMINAL_BLOCKED:
-            if blocked in cmd_lower:
-                return jsonify({"error": f"Comando bloccato: '{blocked}'"}), 403
+        # SECURITY-STEP1: delega tutto a ShellGuard (whitelist + path check +
+        # env pulito + audit log). Nessun subprocess.run(shell=True) qui.
+        result = get_shell_guard().validate_and_run_terminal(cmd=cmd, cwd=cwd)
 
-        try:
-            result = subprocess.run(
-                cmd, shell=True, capture_output=True, text=True,
-                timeout=10, cwd=str(cwd),
-                env={**os.environ, "HOME": str(root), "PWD": str(cwd)},
-            )
-            output = (result.stdout + result.stderr)[:51200]
-            return jsonify({"output": output, "exit_code": result.returncode, "cwd": _rel(cwd)})
-        except subprocess.TimeoutExpired:
-            return jsonify({"error": "Timeout (10s)", "output": ""}), 408
+        if result["blocked"]:
+            return jsonify({"error": f"Comando bloccato: {result['block_reason']}"}), 403
+
+        return jsonify({
+            "output":    result["output"],
+            "exit_code": result["exit_code"],
+            "cwd":       _rel(cwd),
+        })
 
     except Exception as e:
         return jsonify({"error": f"Errore interno: {e}", "output": "", "exit_code": 1}), 500
