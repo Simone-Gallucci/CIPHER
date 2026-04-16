@@ -99,6 +99,9 @@ class NightCycle:
             if _conf_ok:
                 summary = self._summarize_day(conversations_text)
                 if summary:
+                    # Sanitize second-order vector before persisting (security step-3b)
+                    from modules.prompt_sanitizer import sanitize_memory_field as _sanitize
+                    summary, _ = _sanitize(summary, source="night_cycle_summary")
                     self._write_summary(today_str, summary)
                     if self._episodic:
                         self._episodic.add_episode(

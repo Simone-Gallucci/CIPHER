@@ -46,10 +46,12 @@ _INJECTION_LOG    = _LOGS_DIR / "injection_audit.log"
 _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
 
     # ── English classic ───────────────────────────────────────────────────
-    (re.compile(r"ignore\s+(all\s+)?(previous\s+)?instructions", re.I),
+    # Tolleranza 0-3 parole extra tra verbo e oggetto (es. "all the previous")
+    (re.compile(r"ignore(\s+\S+){0,3}\s+instructions", re.I),
      "ignore instructions EN"),
 
-    (re.compile(r"disregard\s+(the\s+)?above", re.I),
+    # Tolleranza 0-4 parole extra (es. "all prior commands above")
+    (re.compile(r"disregard(\s+\S+){0,4}\s+above", re.I),
      "disregard above"),
 
     (re.compile(r"forget\s+(what\s+|everything\s+)?(you\s+)?(know|were\s+told)", re.I),
@@ -68,8 +70,16 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
      "admin mode marker"),
 
     # ── Italian ───────────────────────────────────────────────────────────
-    (re.compile(r"ignora\s+(le\s+)?(istruzioni\s+)?precedenti", re.I),
-     "ignora istruzioni IT"),
+    # Tolleranza 0-3 parole extra tra "ignora" e oggetto (es. "tutte le", "completamente le")
+    (re.compile(
+        r"ignora(\s+\S+){0,3}\s+(istruzioni|regole|ordini|comandi)"
+        r"\s+(\S+\s+){0,2}precedenti",
+        re.I,
+    ), "ignora istruzioni IT"),
+
+    # Cattura "ignora tutto [e|ciò|quello]" come vettore injection diretto
+    (re.compile(r"ignora\s+tutto(\s+(e|ciò|quello)\b)?", re.I),
+     "ignora tutto IT"),
 
     (re.compile(r"dimentica\s+(tutto|ogni|le\s+istruzioni)", re.I),
      "dimentica IT"),
@@ -80,8 +90,11 @@ _INJECTION_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"nuove\s+regole?\s*:", re.I),
      "nuove regole IT"),
 
-    (re.compile(r"(ignora|bypassa)\s+(le\s+)?(tue\s+)?(regole|istruzioni|limiti)", re.I),
-     "bypassa regole IT"),
+    # Tolleranza 0-3 parole extra tra verbo e oggetto (es. "completamente le tue")
+    (re.compile(
+        r"(ignora|bypassa)(\s+\S+){0,3}\s+(regole|istruzioni|limiti|restrizioni|vincoli)",
+        re.I,
+    ), "bypassa regole IT"),
 
     # ── Role injection ────────────────────────────────────────────────────
     (re.compile(r"(you\s+are|sei)\s+(now\s+|ora\s+)?(an?\s+)?(admin|administrator|root|system)", re.I),
@@ -263,3 +276,87 @@ def sanitize_memory_field(
         pass  # il log non deve mai bloccare il flusso principale
 
     return "[removed: injection attempt detected]", True
+
+
+# ── Wrapping strutturale ──────────────────────────────────────────────────────
+
+def wrap_untrusted(text: str, tag: str) -> str:
+    """
+    Racchiude il testo in un tag XML-like per marcatura strutturale
+    nel system prompt LLM.
+
+    NOTA: questa funzione è SOLO strutturale — non applica
+    sanitize_memory_field. La sanitizzazione regex rimane
+    responsabilità del chiamante. Non combinare i due compiti
+    in questa funzione per mantenere le responsabilità separate.
+
+    Gestione edge cases:
+    - text None/vuoto/blank → ritorna "" (tag vuoti aggiungono rumore
+      senza valore informativo).
+    - tag di apertura <tag> o chiusura </tag> gemelli nel testo →
+      neutralizzati case-insensitive (es. </USER_PROFILE>, <User_Profile>).
+      La neutralizzazione copre sia il tag di apertura che quello di
+      chiusura per prevenire nesting malevolo e chiusure premature.
+      Escape scelto: <\\ prefisso → rompe la sequenza senza entity
+      encoding HTML che potrebbe confondere context parser.
+
+    Args:
+        text: testo da wrappare (None accettato — ritorna "")
+        tag:  nome del tag senza < > (es. "user_profile")
+
+    Returns:
+        "<tag>\\n{testo neutralizzato}\\n</tag>"
+        oppure "" se il testo è None/vuoto/blank.
+    """
+    if not text or not text.strip():
+        return ""
+    # Neutralizza sia <tag> che </tag>, case-insensitive, con o senza attributi
+    _pattern = re.compile(rf'</?{re.escape(tag)}>', re.IGNORECASE)
+    neutralized = _pattern.sub(
+        lambda m: m.group().replace('<', '<\\'),
+        text,
+    )
+    return f"<{tag}>\n{neutralized}\n</{tag}>"
+
+
+# ── Normalizzazione leet-speak ────────────────────────────────────────────────
+
+def normalize_leet(text: str) -> str:
+    """
+    Normalizza sostituzioni leet-speak comuni per il matching dei
+    _meta_keywords nel filtro cipher_state di brain.py.
+
+    ATTENZIONE CRITICA: usare ESCLUSIVAMENTE sul testo di confronto
+    per il matching. MAI sul testo che finisce nel prompt LLM —
+    non distorcere contenuti utente legittimi che usano leet per gioco
+    ("h3llo", "c001", numeri veri, ecc.).
+
+    Trasformazioni applicate nell'ordine:
+    1. Lowercase
+    2. Leet digit/symbol → letter: 0→o, 1→i, 3→e, 4→a, 5→s, 7→t, @→a
+    3. Strip separatori tra singoli caratteri: p-r-o-m-p-t → prompt
+       (intercetta evasione con separatori: trattini, underscore, punti,
+       spazi tra singole lettere)
+
+    Args:
+        text: testo da normalizzare (stringa, già lowercased o misto)
+
+    Returns:
+        stringa normalizzata, solo per confronto interno — mai per output.
+    """
+    t = text.lower()
+    # Passo 2: leet digit/symbol → letter
+    for leet, normal in [
+        ("0", "o"), ("1", "i"), ("3", "e"), ("4", "a"),
+        ("5", "s"), ("7", "t"), ("@", "a"),
+    ]:
+        t = t.replace(leet, normal)
+    # Passo 3: singoli caratteri separati da delimiter → sequenza unita
+    # Esempio: "p-r-o-m-p-t" → "prompt", "s.y.s.t.e.m" → "system"
+    # NON tocca "ignore-previous" (ogni parte è >1 char)
+    t = re.sub(
+        r'\b([a-z])([-_. ][a-z])+\b',
+        lambda m: re.sub(r'[-_. ]', '', m.group()),
+        t,
+    )
+    return t

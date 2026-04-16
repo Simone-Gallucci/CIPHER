@@ -1328,13 +1328,26 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         if not query or not self._brain:
             return {"success": False, "error": "Query mancante."}
 
-        result    = self._brain._web_search(query, max_results=3)
+        result = self._brain._web_search(query, max_results=3)
+
+        # Sanitize + wrap il risultato prima di passarlo ai prompt LLM
+        from modules.prompt_sanitizer import sanitize_memory_field, wrap_untrusted
+        _sanitized, _ = sanitize_memory_field(result, source="web_search")
+        _wrapped = wrap_untrusted(_sanitized, "web_search_result")
+        if _wrapped:
+            _wrapped = _wrapped.replace(
+                "<web_search_result>",
+                f'<web_search_result source="query:{query}">',
+                1,
+            )
+        _result_for_llm = _wrapped or _sanitized  # fallback se empty
+
         synthesis = result[:300]
 
         if self._brain:
             try:
                 synthesis = self._brain._call_llm_silent(
-                    f"Hai cercato: '{query}'\nRisultati:\n{result}\n\n"
+                    f"Hai cercato: '{query}'\nRisultati:\n{_result_for_llm}\n\n"
                     f"Sintetizza in 1-2 frasi cosa hai trovato, in prima persona come Cipher."
                 )
             except Exception:
@@ -1344,7 +1357,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         if self._brain and self._interests:
             try:
                 evaluation = self._brain._call_llm_silent(
-                    f"Hai cercato '{query}' e trovato:\n{result[:500]}\n\n"
+                    f"Hai cercato '{query}' e trovato:\n{_result_for_llm[:500]}\n\n"
                     f"Questo argomento ti ha incuriosito genuinamente? "
                     f"Se sì, scrivi in 3-5 parole il topic da aggiungere ai tuoi interessi. "
                     f"Se no, rispondi solo: no."

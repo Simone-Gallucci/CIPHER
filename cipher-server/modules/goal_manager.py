@@ -251,11 +251,18 @@ class GoalManager:
         except Exception as e:
             return []
 
+        # Sanitizza title e description (output Haiku, untrusted) prima della persistenza
+        from modules.prompt_sanitizer import sanitize_memory_field as _sanitize
         added = []
         for goal in new_goals:
             goal["status"] = "active"
             goal["consent_attempts"] = 0
             goal["created_at"] = datetime.now().isoformat()
+            # Sanitize second-order vectors: titoli e descrizioni generati da Haiku
+            if goal.get("title"):
+                goal["title"], _ = _sanitize(goal["title"], source="goal_generation")
+            if goal.get("description"):
+                goal["description"], _ = _sanitize(goal["description"], source="goal_generation")
             self._goals.append(goal)
             added.append(goal)
 

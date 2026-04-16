@@ -236,10 +236,12 @@ class SelfReflection:
         self._save_state()
         self._write_thought(result)
 
-        # Registra nella memoria episodica
+        # Registra nella memoria episodica (second-order: sanitize output Haiku prima di add_episode)
         if self._episodic and result.get("reflection"):
+            from modules.prompt_sanitizer import sanitize_memory_field as _sanitize
+            _reflection_clean, _ = _sanitize(result["reflection"], source="self_reflection")
             self._episodic.add_episode(
-                content=result["reflection"],
+                content=_reflection_clean,
                 episode_type="emotion_shift",
                 tags=[result.get("emotional_state", "neutral")],
                 emotional_state=result.get("emotional_state", "neutral"),
