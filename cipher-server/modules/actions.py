@@ -152,22 +152,25 @@ class ActionDispatcher:
     # ── Shell ─────────────────────────────────────────────────────────
 
     def _run_shell(self, command: str, timeout: int = 30) -> str:
-        """
-        Esegue un comando shell con validazione sicura via ShellGuard.
-
-        Sostituisce subprocess(shell=True): il comando viene validato contro
-        la whitelist SHELL_EXEC_ALLOWED_BINS, i pattern pericolosi vengono
-        bloccati, l'env è isolato (nessun secret esposto) e ogni esecuzione
-        è registrata nel log di audit (logs/shell_audit.log).
-
-        Il consenso dell'utente è già stato ottenuto da ActionDispatcher
-        prima di chiamare questo metodo.
-        """
-        from modules.shell_guard import get_shell_guard
-        return get_shell_guard().validate_and_run_shell_exec(
-            command=command,
-            timeout=timeout,
-        )
+        try:
+            result = subprocess.run(
+                command, shell=True, capture_output=True, text=True, timeout=timeout,
+            )
+            output = result.stdout.strip()
+            errors = result.stderr.strip()
+            if result.returncode == 0:
+                return output if output else "✓ Comando eseguito senza output."
+            else:
+                msg = f"✗ Errore (exit code {result.returncode})"
+                if errors:
+                    msg += f":\n{errors}"
+                if output:
+                    msg += f"\nOutput:\n{output}"
+                return msg
+        except subprocess.TimeoutExpired:
+            return f"✗ Timeout: il comando ha superato {timeout} secondi."
+        except Exception as e:
+            return f"✗ Errore durante l'esecuzione: {e}"
 
     # ── Project inspect ───────────────────────────────────────────────
 
