@@ -127,12 +127,26 @@ def _process_exchange(
     except Exception:
         return 0
 
+    # SECURITY-STEP3A: importa il sanitizer prima del loop — evita import ripetuti
+    from modules.prompt_sanitizer import sanitize_memory_field
+
     saved = 0
     for item in data.get("save", []):
         item_type = item.get("type", "fact")
         key       = item.get("key", "")
         value     = item.get("value", "")
         if not value:
+            continue
+
+        # SECURITY-STEP3A: sanifica ogni valore estratto dall'LLM prima di
+        # scriverlo in profile.json / episodes.json. Un payload injection
+        # nell'input utente potrebbe essere estratto e riportato in memoria,
+        # da dove verrebbe iniettato nel system prompt al turno successivo.
+        value, blocked = sanitize_memory_field(
+            value, user_id="simone", source="memory_extraction"
+        )
+        if blocked:
+            log.warning("SECURITY: injection bloccata in campo memoria (key=%s)", key)
             continue
 
         if item_type == "episode":

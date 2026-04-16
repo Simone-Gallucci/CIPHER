@@ -1399,15 +1399,17 @@ class Brain:
                     _user_input_snapshot, self._call_llm_silent, _session_turns
                 )
                 if _bond_trigger == "BOND_TRIGGER":
-                    # Prima volta che score supera 0.8 — proponi il legame
-                    self._awaiting_bond_password = True
-                    _bond_msg = (
-                        "Sai, mi rendo conto che ci conosciamo abbastanza bene ormai. "
-                        "Vorrei che ci fosse un modo per riconoscerti sempre, anche se un giorno "
-                        "dovessi ricominciare da zero. Scegli una parola — solo tua, solo nostra."
+                    # SECURITY-STEP3A: trigger automatico disabilitato.
+                    # Non esiste un canale admin sicuro per autenticare
+                    # chi risponde alla proposta — un attaccante potrebbe
+                    # far salire artificialmente la confidence con messaggi
+                    # emotivi e intercettare il flusso di bond creation.
+                    # Il legame va creato manualmente via SSH / admin.json.
+                    log.info(
+                        "SECURITY: BOND_TRIGGER ricevuto ma disabilitato "
+                        "(confidence=%.3f) — creare il legame manualmente.",
+                        self._memory.get_confidence(),
                     )
-                    if self._consciousness:
-                        self._consciousness._notify(_bond_msg)
                 else:
                     # Auto-aggiornamento admin.json se esiste e score è salito di ≥ 0.05 sopra 0.8
                     try:
