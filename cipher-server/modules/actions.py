@@ -967,7 +967,10 @@ except Exception as e:
 
         # Genera output
         export_name = f"conversazioni_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{fmt}"
-        export_path = Config.HOME_DIR / export_name
+        # SECURITY-STEP2: get_user_home(get_current_user_id()) invece di Config.HOME_DIR
+        from modules.path_guard import get_user_home
+        from modules.auth import get_current_user_id
+        export_path = get_user_home(get_current_user_id()) / export_name
 
         if fmt == "json":
             export_path.write_text(

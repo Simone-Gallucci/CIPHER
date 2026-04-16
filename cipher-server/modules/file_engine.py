@@ -1,12 +1,19 @@
 """
 modules/file_engine.py – Gestione file universale per Cipher
                          Supporta: Excel, CSV, PDF, Word, PowerPoint, immagini, TXT, codice, AutoCAD (DXF)
-                         Canali input: Telegram (uploads/) e Pi locale
+                         Canali input: Telegram (uploads/) e dashboard web
+
+SECURITY-STEP2: _resolve_path() riscritto per usare PathGuard.validate_path()
+invece della logica _is_subpath con BASE_DIR che permetteva la lettura di
+.env e secrets/ via prompt injection. UPLOADS_DIR rimosso come costante
+globale: ogni FileEngine usa la uploads/ della home utente.
 """
 
+import logging
 import os
 import json
 import shutil
+import time
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -14,17 +21,53 @@ from datetime import datetime
 from rich.console import Console
 from config import Config
 
+log = logging.getLogger("cipher.file_engine")
 console = Console()
-UPLOADS_DIR = Config.BASE_DIR / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+# SECURITY-STEP2: _LEGACY_UPLOADS è il vecchio percorso globale.
+# Usato SOLO per il warning di migrazione all'avvio.
+_LEGACY_UPLOADS = Config.BASE_DIR / "uploads"
 
 
 class FileEngine:
-    def __init__(self, llm_silent_fn=None) -> None:
+    def __init__(
+        self,
+        user_id: Optional[str] = None,
+        llm_silent_fn=None,
+    ) -> None:
         """
-        llm_silent_fn: funzione Brain._call_llm_silent per descrizioni intelligenti
+        SECURITY-STEP2: user_id determina la uploads/ per-utente via PathGuard.
+        Default a get_current_user_id() se non specificato.
+
+        Args:
+            user_id:       chi usa il motore (default: utente corrente)
+            llm_silent_fn: Brain._call_llm_silent per descrizioni intelligenti
         """
-        self._llm = llm_silent_fn
+        from modules.auth import get_current_user_id
+        from modules.path_guard import get_user_home
+        self.user_id     = user_id or get_current_user_id()
+        self.uploads_dir = get_user_home(self.user_id) / "uploads"
+        self.uploads_dir.mkdir(parents=True, exist_ok=True)
+        self._llm        = llm_silent_fn
+        self._check_legacy_uploads()
+
+    @staticmethod
+    def _check_legacy_uploads() -> None:
+        """
+        SECURITY-STEP2: avvisa se uploads/ globale contiene file non migrati.
+        Non blocca l'avvio.
+        """
+        if _LEGACY_UPLOADS.is_dir():
+            stale = [
+                f for f in _LEGACY_UPLOADS.iterdir()
+                if f.name != "DEPRECATED.md"
+            ]
+            if stale:
+                log.warning(
+                    "SECURITY-STEP2: uploads/ legacy (%s) contiene %d file "
+                    "non migrati: %s — eseguire scripts/migrate_home.py",
+                    _LEGACY_UPLOADS, len(stale), [f.name for f in stale],
+                )
 
     # ── Router principale ─────────────────────────────────────────────────
 
@@ -377,57 +420,93 @@ class FileEngine:
     # ── Lista file uploads ────────────────────────────────────────────────
 
     def list_uploads(self) -> str:
-        """Lista i file nella cartella uploads."""
-        files = list(UPLOADS_DIR.iterdir())
+        """Lista i file nella uploads/ dell'utente corrente."""
+        # SECURITY-STEP2: usa self.uploads_dir (per-utente) invece di UPLOADS_DIR globale
+        files = [f for f in self.uploads_dir.iterdir() if f.is_file()]
         if not files:
             return "Nessun file nella cartella uploads."
         lines = []
-        for f in sorted(files):
-            size = f.stat().st_size
-            lines.append(f"- {f.name} ({size} bytes)")
+        for f in sorted(files, key=lambda x: x.name):
+            lines.append(f"- {f.name} ({f.stat().st_size} bytes)")
         return "File disponibili:\n" + "\n".join(lines)
+
+    def save_upload(self, filename: str, content: bytes) -> Path:
+        """
+        Salva un file ricevuto (Telegram / API) nella uploads/ dell'utente.
+
+        SECURITY-STEP2: aggiunto per correggere il bug in notifier.py che
+        chiamava engine.save_upload() su un metodo inesistente (AttributeError
+        silenzioso). Applica secure_filename per sanitizzare il nome.
+
+        Args:
+            filename: nome originale del file (potenzialmente non sicuro)
+            content:  contenuto binario
+
+        Returns:
+            Path assoluto del file salvato nella uploads/ utente
+        """
+        from werkzeug.utils import secure_filename
+        safe_name = secure_filename(filename)
+        if not safe_name:
+            safe_name = f"upload_{int(time.time())}"
+        dest = self.uploads_dir / safe_name
+        dest.write_bytes(content)
+        return dest
 
     # ── Utility ───────────────────────────────────────────────────────────
 
     def _resolve_path(self, path: str) -> Path:
         """
-        Risolve il path del file.
-        Se è relativo, cerca prima in uploads/, poi nella home di Cipher.
-        Tutti i path vengono validati: devono risiedere dentro UPLOADS_DIR,
-        Config.HOME_DIR o Config.BASE_DIR per prevenire path traversal.
+        Risolve il path del file tramite PathGuard.
+
+        SECURITY-STEP2: sostituisce la logica con _ALLOWED_ROOTS che includeva
+        Config.BASE_DIR, permettendo la lettura di .env e secrets/ via LLM
+        (prompt injection → file_read con path=".env" → contenuto API keys).
+
+        Entrambi i rami passano per validate_path() — nessun return prima
+        della validazione. Un path come "../../memory/profile.json" usato
+        nel ramo uploads (diventa "uploads/../../memory/profile.json") risolve
+        fuori dalla user_home e viene bloccato da PathGuard.
+
+        Strategia:
+          0. Short-circuit: se path inizia già con "uploads/", trattalo come
+             path user_home diretto — evita audit doppio e prefisso assurdo
+             "uploads/uploads/..."
+          1. Prova come "uploads/<path>" — caso tipico: solo nome file da
+             Telegram. Usa is_file() (non exists()) per escludere directory.
+          2. Fallback: path relativo alla user_home — file creati da Cipher
+
+        Args:
+            path: path grezzo (nome file o path relativo)
+
+        Returns:
+            Path assoluto validato dentro home/user_<id>/
+
+        Raises:
+            PathTraversalError: path fuori dalla home utente
         """
-        _ALLOWED_ROOTS = [
-            UPLOADS_DIR.resolve(),
-            Config.HOME_DIR.resolve(),
-            Config.BASE_DIR.resolve(),
-        ]
+        from modules.path_guard import get_path_guard, PathTraversalError
 
-        p = Path(path)
-        if p.is_absolute():
-            resolved = p.resolve()
-            if any(self._is_subpath(resolved, root) for root in _ALLOWED_ROOTS):
-                return resolved
-            return UPLOADS_DIR / p.name  # fallback sicuro: solo il filename
+        guard = get_path_guard()
 
-        # Cerca in uploads/
-        upload_path = UPLOADS_DIR / path
-        if upload_path.exists():
-            return upload_path
-        # Cerca relativo alla home di cipher
-        cipher_path = Config.BASE_DIR / path
-        if cipher_path.exists() and self._is_subpath(cipher_path.resolve(), Config.BASE_DIR.resolve()):
-            return cipher_path
-        # Fallback: uploads/
-        return UPLOADS_DIR / path
+        # Caso 0: path già prefissato con uploads/ — validazione diretta
+        # senza aggiungere un secondo "uploads/" davanti
+        if path.startswith("uploads/") or path.startswith("uploads\\"):
+            return guard.validate_path(self.user_id, path, "READ")
 
-    @staticmethod
-    def _is_subpath(path: Path, root: Path) -> bool:
-        """Verifica che path sia contenuto in root (previene traversal via symlink)."""
+        # Ramo 1: prova come uploads/<path> (caso tipico: solo nome file)
+        # SECURITY-STEP2: is_file() invece di exists() — esclude directory
         try:
-            path.resolve().relative_to(root.resolve())
-            return True
-        except ValueError:
-            return False
+            candidate = guard.validate_path(
+                self.user_id, f"uploads/{path}", "READ"
+            )
+            if candidate.is_file():
+                return candidate
+        except PathTraversalError:
+            pass  # non è dentro uploads/, prova ramo 2
+
+        # Ramo 2: path relativo alla user_home
+        return guard.validate_path(self.user_id, path, "READ")
 
     def _suggest_package(self, ext: str) -> str:
         mapping = {

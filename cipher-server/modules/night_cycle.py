@@ -398,7 +398,10 @@ class NightCycle:
 
             # Salva il documento
             doc_name  = f"prep_{tomorrow_str}_{slug}.md"
-            doc_path  = Config.HOME_DIR / doc_name
+            # SECURITY-STEP2: get_user_home(get_system_owner_id()) invece di Config.HOME_DIR
+            from modules.path_guard import get_user_home
+            from modules.auth import get_system_owner_id
+            doc_path  = get_user_home(get_system_owner_id()) / doc_name
             header    = f"# Preparazione: {title}\n*{tomorrow_str} — {time}*\n\n"
             doc_path.write_text(header + scaletta, encoding="utf-8")
 

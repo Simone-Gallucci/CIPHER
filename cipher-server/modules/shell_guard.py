@@ -134,10 +134,16 @@ class ShellGuard:
 
     def __init__(
         self,
-        home_dir: Path = Config.HOME_DIR,
+        home_dir: Optional[Path] = None,
         audit_log: Path = _AUDIT_LOG,
     ) -> None:
+        # SECURITY-STEP2: home_dir ora è per-utente via get_user_home().
+        # Default a get_current_user_id() se non specificato esplicitamente.
         # SECURITY-STEP1: home_dir è il confine fisico per path traversal
+        if home_dir is None:
+            from modules.auth import get_current_user_id
+            from modules.path_guard import get_user_home
+            home_dir = get_user_home(get_current_user_id())
         self.home_dir = home_dir.resolve()
         self._audit_logger = self._setup_audit_logger(audit_log)
 

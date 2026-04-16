@@ -7,6 +7,10 @@ data/
 *.bak.*
 comportamento.bak*/
 memory_backup_*/
+# Backup di migrazioni (mai committati)
+*.backup_*/
+home.backup_*/
+uploads.backup_*/
 scheduling/
 apprendimento/
 

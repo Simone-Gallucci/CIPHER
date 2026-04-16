@@ -97,7 +97,9 @@ class Config:
   
     # ── Paths ────────────────────────────────────────────────
     BASE_DIR:   Path = Path(__file__).parent
-    HOME_DIR:   Path = BASE_DIR / "home"
+    # SECURITY-STEP2: HOME_DIR rimosso. Usare modules.path_guard.get_user_home()
+    # per accedere alla home per-utente (home/user_<id>/).
+    HOME_ROOT:  Path = BASE_DIR / "home"     # root multi-user (padre di user_<id>/)
     MEMORY_DIR: Path = BASE_DIR / "memory"
     MODELS_DIR: Path = BASE_DIR / "models"
     DATA_DIR:   Path = BASE_DIR / "data"     # permanente — mai resettato
@@ -139,5 +141,7 @@ class Config:
 
 
 # Crea le directory necessarie al primo avvio
-for _d in (Config.HOME_DIR, Config.MEMORY_DIR, Config.MODELS_DIR, Config.DATA_DIR):
+# SECURITY-STEP2: HOME_ROOT al posto di HOME_DIR; le singole home utente
+# vengono create da PathGuard.get_user_home() con permessi 0o700.
+for _d in (Config.HOME_ROOT, Config.MEMORY_DIR, Config.MODELS_DIR, Config.DATA_DIR):
     _d.mkdir(parents=True, exist_ok=True)

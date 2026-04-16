@@ -506,35 +506,36 @@ def chat_history():
 
 
 # ── File manager endpoints ─────────────────────────────────────────────────
-_FILES_ROOT = None  # lazy-init a Config.HOME_DIR
+# SECURITY-STEP2: _files_root() e _safe_file_path() rimossi.
+# Sostituiti da PathGuard.validate_path() che usa relative_to() invece di
+# str.startswith() (bypassabile con directory col nome adiacente es. home_evil/).
+# secure_filename aggiunto in files_upload per sanitizzare f.filename.
+
+from modules.path_guard import get_path_guard, PathTraversalError
+from modules.auth import get_current_user_id
 
 
-def _files_root():
-    global _FILES_ROOT
-    if _FILES_ROOT is None:
-        _FILES_ROOT = Config.HOME_DIR.resolve()
-        _FILES_ROOT.mkdir(parents=True, exist_ok=True)
-    return _FILES_ROOT
-
-
-def _safe_file_path(rel: str):
-    """Risolve rel rispetto a HOME_DIR e verifica che non esca dalla root."""
-    import os
-    root = _files_root()
-    # Tratta percorsi assoluti come relativi alla root
-    rel = rel.lstrip("/") if rel.startswith("/") else rel
-    target = (root / rel).resolve()
-    if not str(target).startswith(str(root)):
-        return None
-    return target
+def _pg_validate(path: str, operation: str):
+    """
+    Helper interno: valida path per l'utente corrente via PathGuard.
+    Ritorna (target, None) se ok, (None, response) se errore.
+    """
+    try:
+        target = get_path_guard().validate_path(
+            get_current_user_id(), path or ".", operation
+        )
+        return target, None
+    except PathTraversalError as e:
+        return None, (jsonify({"error": str(e)}), 403)
 
 
 @app.route("/api/files", methods=["GET"])
 def files_list():
+    # SECURITY-STEP2: PathGuard.validate_path() invece di _safe_file_path()
     path = request.args.get("path", "")
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    target, err = _pg_validate(path, "LIST")
+    if err:
+        return err
     if not target.exists():
         return jsonify({"error": "Percorso non trovato"}), 404
     if not target.is_dir():
@@ -558,9 +559,10 @@ def files_delete():
     path = data.get("path", "")
     if not path:
         return jsonify({"error": "path mancante"}), 400
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    # SECURITY-STEP2: PathGuard invece di _safe_file_path()
+    target, err = _pg_validate(path, "DELETE")
+    if err:
+        return err
     if not target.exists():
         return jsonify({"error": "File non trovato"}), 404
     try:
@@ -578,9 +580,10 @@ def files_read():
     path = request.args.get("path", "")
     if not path:
         return jsonify({"error": "path mancante"}), 400
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    # SECURITY-STEP2: PathGuard invece di _safe_file_path()
+    target, err = _pg_validate(path, "READ")
+    if err:
+        return err
     if not target.exists() or not target.is_file():
         return jsonify({"error": "File non trovato"}), 404
     if target.stat().st_size > 1_048_576:  # 1 MB
@@ -601,9 +604,10 @@ def files_write():
     content = data.get("content", "")
     if not path:
         return jsonify({"error": "path mancante"}), 400
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    # SECURITY-STEP2: PathGuard invece di _safe_file_path()
+    target, err = _pg_validate(path, "WRITE")
+    if err:
+        return err
     try:
         # Crea .bak se il file esiste già
         if target.exists():
@@ -619,23 +623,40 @@ def files_write():
 
 @app.route("/api/files/upload", methods=["POST"])
 def files_upload():
+    from werkzeug.utils import secure_filename
     path = request.args.get("path", "")
     if "file" not in request.files:
         return jsonify({"error": "nessun file"}), 400
     f = request.files["file"]
-    subdir = _safe_file_path(path) if path else _files_root()
-    if subdir is None:
-        return jsonify({"error": "Accesso negato"}), 403
-    subdir.mkdir(parents=True, exist_ok=True)
-    target = _safe_file_path((path.rstrip("/") + "/" + f.filename) if path else f.filename)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
-    data = f.read(10_485_761)  # legge un byte in più per verificare limite
-    if len(data) > 10_485_760:
+
+    # SECURITY-STEP2: secure_filename sanitizza il nome (rimuove '/', '..', caratteri
+    # speciali). Impedisce path traversal via f.filename = "../../etc/cron.d/evil".
+    safe_name = secure_filename(f.filename or "")
+    if not safe_name:
+        return jsonify({"error": "nome file non valido"}), 400
+
+    # Valida la subdir destinazione (se specificata)
+    if path:
+        subdir, err = _pg_validate(path, "WRITE")
+        if err:
+            return err
+        subdir.mkdir(parents=True, exist_ok=True)
+        target_rel = path.rstrip("/") + "/" + safe_name
+    else:
+        target_rel = safe_name
+
+    # Valida il path completo del file destinazione
+    target, err = _pg_validate(target_rel, "WRITE")
+    if err:
+        return err
+
+    file_data = f.read(10_485_761)  # legge un byte in più per verificare limite
+    if len(file_data) > 10_485_760:
         return jsonify({"error": "File troppo grande (max 10MB)"}), 413
     try:
-        target.write_bytes(data)
-        return jsonify({"ok": True, "name": f.filename})
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(file_data)
+        return jsonify({"ok": True, "name": safe_name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -646,9 +667,10 @@ def files_download():
     path = request.args.get("path", "")
     if not path:
         return jsonify({"error": "path mancante"}), 400
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    # SECURITY-STEP2: PathGuard invece di _safe_file_path()
+    target, err = _pg_validate(path, "READ")
+    if err:
+        return err
     if not target.exists() or not target.is_file():
         return jsonify({"error": "File non trovato"}), 404
     return send_file(str(target), as_attachment=True, download_name=target.name)
@@ -660,9 +682,10 @@ def files_mkdir():
     path = data.get("path", "")
     if not path:
         return jsonify({"error": "path mancante"}), 400
-    target = _safe_file_path(path)
-    if target is None:
-        return jsonify({"error": "Accesso negato"}), 403
+    # SECURITY-STEP2: PathGuard invece di _safe_file_path()
+    target, err = _pg_validate(path, "WRITE")
+    if err:
+        return err
     try:
         target.mkdir(parents=True, exist_ok=True)
         return jsonify({"ok": True})
@@ -738,7 +761,9 @@ def terminal_run():
         if cmd == "help":
             return jsonify({"output": _TERMINAL_HELP, "exit_code": 0})
 
-        root = _files_root()
+        # SECURITY-STEP2: get_user_home() invece di _files_root() (rimossa)
+        from modules.path_guard import get_user_home
+        root = get_user_home(get_current_user_id())
 
         # Risolvi cwd inviato dal client (relativo a root)
         client_cwd = data.get("cwd", "").strip().lstrip("/")
@@ -792,7 +817,9 @@ def terminal_complete():
         data = request.get_json(silent=True) or {}
         partial = data.get("partial", "")
         client_cwd = data.get("cwd", "").strip().lstrip("/")
-        root = _files_root()
+        # SECURITY-STEP2: get_user_home() invece di _files_root() (rimossa)
+        from modules.path_guard import get_user_home
+        root = get_user_home(get_current_user_id())
         if client_cwd:
             candidate = (root / client_cwd).resolve()
             cwd = candidate if str(candidate).startswith(str(root)) and candidate.is_dir() else root
@@ -814,14 +841,12 @@ def terminal_complete():
 
 
 # ── Notes endpoint ─────────────────────────────────────────────────────────
-_NOTES_FILE = None
-
 
 def _notes_file():
-    global _NOTES_FILE
-    if _NOTES_FILE is None:
-        _NOTES_FILE = Config.HOME_DIR / "notes.md"
-    return _NOTES_FILE
+    # SECURITY-STEP2: get_user_home() invece di Config.HOME_DIR
+    from modules.path_guard import get_user_home
+    from modules.auth import get_current_user_id
+    return get_user_home(get_current_user_id()) / "notes.md"
 
 
 @app.route("/api/notes", methods=["GET"])

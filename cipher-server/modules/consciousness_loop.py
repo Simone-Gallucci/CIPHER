@@ -1120,7 +1120,10 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                     documents = brief.get("documents", [])
                     first = True
                     for doc in documents:
-                        doc_path = Config.HOME_DIR / doc.get("doc_name", "")
+                        # SECURITY-STEP2: get_user_home(get_system_owner_id()) invece di Config.HOME_DIR
+                        from modules.path_guard import get_user_home
+                        from modules.auth import get_system_owner_id
+                        doc_path = get_user_home(get_system_owner_id()) / doc.get("doc_name", "")
                         if not doc_path.exists():
                             continue
                         content = doc_path.read_text(encoding="utf-8")
