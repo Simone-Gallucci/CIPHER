@@ -551,9 +551,13 @@ class Brain:
         self._tabula_rasa_pending: bool = False
 
         # Sistema legame permanente Admin
-        self._admin_attempts: int = 0
-        self._admin_lockout_until: Optional[datetime] = None
+        from modules.admin_lockout import AdminLockout
+        self._admin_lockout = AdminLockout()
         self._awaiting_bond_password: bool = False
+
+        # Rate limiting messaggi
+        from modules.message_rate_limiter import MessageRateLimiter
+        self._rate_limiter = MessageRateLimiter()
 
         # Stato pendente per il comando Reset Conversazione (linguaggio naturale)
         self._reset_conv_pending: bool = False
@@ -577,27 +581,21 @@ class Brain:
     #  Sistema legame permanente                                           #
     # ------------------------------------------------------------------ #
 
-    def _handle_admin_command(self, payload: str) -> str:
+    def _handle_admin_command(self, payload: str, sender_id: str = "") -> str:
         """
         Gestisce il comando Admin+Password (login) o Admin+OldPass+NewPass (cambio).
-        Controlla lockout, verifica checksum e password, ripristina il profilo.
+        Controlla lockout persistente, verifica checksum e password, ripristina il profilo.
         """
         from modules.admin_manager import (
             load_admin, save_admin, verify_password, hash_password,
             admin_exists, ADMIN_FILE,
         )
-        from datetime import timedelta
 
-        # ── Lockout ──────────────────────────────────────────────────────
-        if self._admin_lockout_until is not None:
-            if datetime.now() < self._admin_lockout_until:
-                remaining = int(
-                    (self._admin_lockout_until - datetime.now()).total_seconds() / 60
-                ) + 1
-                return f"Non rispondo a questo comando per i prossimi {remaining} minuti."
-            else:
-                self._admin_lockout_until = None
-                self._admin_attempts = 0
+        # ── Lockout persistente ──────────────────────────────────────────
+        _lock_key = sender_id or "unknown"
+        locked, remaining = self._admin_lockout.is_locked(_lock_key)
+        if locked:
+            return f"Accesso bloccato. Riprova tra {remaining} minuti."
 
         # ── Distingui login, cambio password, status ─────────────────────
         parts = payload.split("+", 2)
@@ -624,15 +622,13 @@ class Brain:
         pw_salt = admin["relationship"]["password_salt"]
 
         if not verify_password(old_password, pw_hash, pw_salt):
-            self._admin_attempts += 1
-            if self._admin_attempts >= 3:
-                self._admin_lockout_until = datetime.now() + timedelta(minutes=10)
-                self._admin_attempts = 0
-                return "Troppi tentativi. Non rispondo a questo comando per i prossimi 10 minuti."
-            return "Non ti riconosco."
+            is_locked, lock_msg = self._admin_lockout.record_failure(
+                _lock_key, detail=f"via chat (sender={sender_id})"
+            )
+            return lock_msg
 
         # ── Password corretta — reset tentativi ───────────────────────────
-        self._admin_attempts = 0
+        self._admin_lockout.record_success(_lock_key)
 
         # Diagnostica status
         if is_status:
@@ -1196,15 +1192,28 @@ class Brain:
     #  Core think loop                                                     #
     # ------------------------------------------------------------------ #
 
-    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg", voice_source: bool = False, source: str = "") -> str:
+    def think(self, user_input: str, image_b64: Optional[str] = None, media_type: str = "image/jpeg", voice_source: bool = False, source: str = "", sender_id: str = "") -> str:
         if not user_input.strip() and not image_b64:
             return "Non ho capito, puoi ripetere?"
+
+        # ── Rate limiting (prima di tutto — evita lavoro LLM inutile) ─────────
+        if sender_id:
+            _rl_ok, _rl_msg = self._rate_limiter.check(sender_id)
+            if not _rl_ok:
+                return _rl_msg
+            self._rate_limiter.record(sender_id)
+        else:
+            import logging as _rl_logging
+            _rl_logging.getLogger("cipher.brain").warning(
+                "brain.think() chiamato senza sender_id — "
+                "rate limiting non attivo per questa richiesta"
+            )
 
         # ── Admin riconoscimento (intercept prioritario — prima di tutto) ──────
         import re as _re_admin
         _admin_match = _re_admin.match(r'^[Aa]dmin\+(.+)$', user_input.strip())
         if _admin_match:
-            return self._handle_admin_command(_admin_match.group(1))
+            return self._handle_admin_command(_admin_match.group(1), sender_id=sender_id)
 
         # ── Legame pendente — password in attesa ──────────────────────────────
         if self._awaiting_bond_password:

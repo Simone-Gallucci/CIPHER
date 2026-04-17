@@ -216,11 +216,12 @@ def chat():
     image_b64  = data.get("image_b64")
     media_type = data.get("media_type", "image/jpeg")
     source     = data.get("source", "")
+    sender_id  = str(data.get("chat_id", ""))
     if not message and not image_b64:
         return jsonify({"error": "messaggio vuoto"}), 400
     try:
         _t0 = _time.time()
-        response = brain.think(message, image_b64=image_b64, media_type=media_type, source=source)
+        response = brain.think(message, image_b64=image_b64, media_type=media_type, source=source, sender_id=sender_id)
         console.print(f"[dim]⏱ chat: {_time.time() - _t0:.1f}s[/dim]")
         return jsonify({"response": response})
     except Exception as e:

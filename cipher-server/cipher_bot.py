@@ -90,8 +90,10 @@ def _download_telegram_file(file_id: str) -> bytes:
 
 # ── Helper: invia testo al server Cipher ─────────────────────────────
 
-def _ask_cipher(text: str, image_b64: str | None = None, media_type: str = "image/jpeg") -> str:
+def _ask_cipher(text: str, image_b64: str | None = None, media_type: str = "image/jpeg", chat_id: str = "") -> str:
     payload: dict = {"message": text}
+    if chat_id:
+        payload["chat_id"] = chat_id
     if image_b64:
         payload["image_b64"] = image_b64
         payload["media_type"] = media_type
@@ -249,8 +251,9 @@ async def cmd_pensieri(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not is_authorized(update):
         await update.message.reply_text("⛔ Accesso non autorizzato.")
         return
+    _cid = str(update.effective_chat.id)
     await context.bot.send_chat_action(update.effective_chat.id, action="typing")
-    reply = _ask_cipher("a cosa stai pensando?")
+    reply = _ask_cipher("a cosa stai pensando?", chat_id=_cid)
     await update.message.reply_text(reply)
 
 
@@ -259,8 +262,9 @@ async def cmd_obiettivi(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not is_authorized(update):
         await update.message.reply_text("⛔ Accesso non autorizzato.")
         return
+    _cid = str(update.effective_chat.id)
     await context.bot.send_chat_action(update.effective_chat.id, action="typing")
-    reply = _ask_cipher("che obiettivi hai al momento?")
+    reply = _ask_cipher("che obiettivi hai al momento?", chat_id=_cid)
     await update.message.reply_text(reply)
 
 
@@ -273,6 +277,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     message = update.message
     chat_id = update.effective_chat.id
+    _cid = str(chat_id)
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
@@ -290,14 +295,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Passa al server con l'azione appropriata
         # Il server usa il FileEngine per gestire il file
         prompt = f"[FILE:{filename}] {instruction}"
-        reply  = _ask_cipher(prompt)
+        reply  = _ask_cipher(prompt, chat_id=_cid)
         sent = await message.reply_text(reply)
         _msg_ids.append(sent.message_id)
         return
 
     # ── TESTO ─────────────────────────────────────────────────────────
     if message.text:
-        reply = _ask_cipher(message.text.strip())
+        reply = _ask_cipher(message.text.strip(), chat_id=_cid)
         if reply.startswith("__RESET__"):
             reply = reply[len("__RESET__"):]
             await _clear_telegram_chat(context.bot, chat_id, context.user_data)
@@ -319,7 +324,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         t_sent = await message.reply_text(f"🎙️ _{transcript}_", parse_mode="Markdown")
         _msg_ids.append(t_sent.message_id)
-        reply = _ask_cipher(transcript)
+        reply = _ask_cipher(transcript, chat_id=_cid)
         r_sent = await message.reply_text(reply)
         _msg_ids.append(r_sent.message_id)
 
@@ -343,7 +348,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
         b64 = base64.standard_b64encode(raw).decode("utf-8")
         text = message.caption or "[foto]"
-        reply = _ask_cipher(text, image_b64=b64, media_type="image/jpeg")
+        reply = _ask_cipher(text, image_b64=b64, media_type="image/jpeg", chat_id=_cid)
         sent = await message.reply_text(reply)
         _msg_ids.append(sent.message_id)
         return
@@ -366,7 +371,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         # Se c'è già una caption, usala come istruzione diretta
         if caption:
             prompt = f"[FILE:{filename}] {caption}"
-            reply  = _ask_cipher(prompt)
+            reply  = _ask_cipher(prompt, chat_id=_cid)
             sent = await message.reply_text(reply)
             _msg_ids.append(sent.message_id)
         else:

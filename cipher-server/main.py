@@ -77,7 +77,7 @@ def run_text_mode(brain: Brain, voice: Voice) -> None:
             voice.speak("Conversazione resettata.")
             continue
 
-        response = brain.think(user_input, voice_source=voice.enabled)
+        response = brain.think(user_input, voice_source=voice.enabled, sender_id="cli")
         if response.startswith("__RESET__"):
             response = response[len("__RESET__"):]
             console.clear()
@@ -122,7 +122,7 @@ def run_voice_mode(brain: Brain, voice: Voice) -> None:
                 voice.speak("Conversazione resettata.")
                 continue
 
-            response = brain.think(command, voice_source=True)
+            response = brain.think(command, voice_source=True, sender_id="cli")
             if response.startswith("__RESET__"):
                 response = response[len("__RESET__"):]
                 console.clear()
@@ -210,7 +210,7 @@ def run_both_mode(brain: Brain, voice: Voice) -> None:
 
             if processing_lock.acquire(blocking=False):
                 try:
-                    response = brain.think(text, voice_source=voice.enabled)
+                    response = brain.think(text, voice_source=voice.enabled, sender_id="cli")
                     if response.startswith("__RESET__"):
                         response = response[len("__RESET__"):]
                         console.clear()
