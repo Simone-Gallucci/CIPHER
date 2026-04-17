@@ -7,6 +7,7 @@ Funzioni riutilizzabili usate da più moduli:
 """
 
 import json
+import os
 import threading
 from pathlib import Path
 from typing import Optional
@@ -165,13 +166,15 @@ def strip_action_json(text: str) -> str:
     return text
 
 
-def write_json_atomic(path: Path, data, **dump_kwargs) -> None:
+def write_json_atomic(path: Path, data, permissions: int | None = None, **dump_kwargs) -> None:
     """
     Scrive dati JSON in modo atomico su disco.
 
     - Thread-safe: lock durante write + rename.
     - Process-safe: Path.rename() è atomico su Linux (stesso filesystem),
       quindi anche memory_worker.py e server.py non si pestano i piedi.
+    - permissions: se specificato (es. 0o600), chmod sul file tmp PRIMA
+      del rename — nessuna race window a permessi default.
 
     Sostituisce il pattern: path.write_text(json.dumps(data, ...))
     nei punti in cui più thread o processi scrivono lo stesso file.
@@ -182,4 +185,6 @@ def write_json_atomic(path: Path, data, **dump_kwargs) -> None:
     tmp_path = path.with_suffix(path.suffix + ".tmp")
     with _write_lock:
         tmp_path.write_text(content, encoding="utf-8")
+        if permissions is not None:
+            os.chmod(tmp_path, permissions)
         tmp_path.rename(path)

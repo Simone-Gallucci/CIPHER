@@ -15,9 +15,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import write_json_atomic
 
-_LOG_FILE  = Config.MEMORY_DIR / "action_log.json"
+_LOG_FILE  = get_user_memory_dir(get_system_owner_id()) / "action_log.json"
 _KEEP_DAYS = 30
 # Pulizia ogni N log per non farlo ad ogni append
 _CLEANUP_EVERY = 50
@@ -60,7 +61,7 @@ class ActionLog:
         try:
             entries = self._load()
             entries.append(entry)
-            write_json_atomic(_LOG_FILE, entries)
+            write_json_atomic(_LOG_FILE, entries, permissions=0o600)
         except Exception:
             pass  # Il log non deve mai bloccare l'esecuzione
 
@@ -125,7 +126,7 @@ class ActionLog:
         fresh = [e for e in entries if _parse_ts(e.get("timestamp", "")) >= cutoff]
         if len(fresh) < len(entries):
             try:
-                write_json_atomic(_LOG_FILE, fresh)
+                write_json_atomic(_LOG_FILE, fresh, permissions=0o600)
             except Exception:
                 pass
 

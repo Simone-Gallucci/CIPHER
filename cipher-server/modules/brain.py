@@ -12,6 +12,7 @@ from openai import OpenAI
 from rich.console import Console
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import extract_action_json, extract_all_action_json, write_json_atomic
 from modules import llm_usage
 
@@ -195,11 +196,19 @@ def _build_confidence_context(confidence: float, profile: dict) -> str:
         )
 
 
-def _build_system_prompt(memory_context: str, history: "list[dict] | None" = None, static_prompt: str = "") -> str:
+def _build_system_prompt(
+    memory_context: str,
+    history: "list[dict] | None" = None,
+    static_prompt: str = "",
+    mem_dir: "Path | None" = None,
+) -> str:
     """
     Assembla il system prompt a partire dal prompt statico (comportamento/)
     già caricato all'avvio, più le sezioni dinamiche (memoria, obiettivi, ecc.).
+
+    SECURITY-STEP4: mem_dir è la directory di memoria per-utente.
     """
+    assert mem_dir is not None, "mem_dir è obbligatorio per _build_system_prompt"
     sections = []
 
     if static_prompt:
@@ -251,7 +260,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
         sections.append(_wrap(memory_context, "user_profile"))
 
     # Contesto livello relazione (confidence_score)
-    profile_file = Config.MEMORY_DIR / "profile.json"
+    profile_file = mem_dir / "profile.json"
     _profile_data: dict = {}
     if profile_file.exists():
         try:
@@ -284,7 +293,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
             pass
 
     # Insights sui pattern comportamentali
-    insights_file = Config.MEMORY_DIR / "pattern_insights.md"
+    insights_file = mem_dir / "pattern_insights.md"
     if insights_file.exists():
         try:
             insights_text = _read_cached(insights_file).strip()
@@ -302,7 +311,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
             pass
 
     # Note sulla voce — coerenza tra sessioni
-    voice_file = Config.MEMORY_DIR / "voice_notes.md"
+    voice_file = mem_dir / "voice_notes.md"
     if voice_file.exists():
         try:
             voice_text = _read_cached(voice_file).strip()
@@ -335,7 +344,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
         pass
 
     # Task in corso — solo titoli degli obiettivi attivi (le descrizioni non servono al contesto)
-    goals_file = Config.MEMORY_DIR / "goals.json"
+    goals_file = mem_dir / "goals.json"
     if goals_file.exists():
         try:
             import json as _json_goals
@@ -351,7 +360,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
             pass
 
     # Stato attuale di Cipher — cosa sente e cosa vuole esplorare (dati reali)
-    cipher_state_file = Config.MEMORY_DIR / "cipher_state.json"
+    cipher_state_file = mem_dir / "cipher_state.json"
     if cipher_state_file.exists():
         try:
             state = json.loads(_read_cached(cipher_state_file))
@@ -397,7 +406,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
             pass
 
     # Ultimo pensiero reale di Cipher (dal diario di riflessioni)
-    thoughts_file = Config.MEMORY_DIR / "thoughts.md"
+    thoughts_file = mem_dir / "thoughts.md"
     if thoughts_file.exists():
         try:
             import re as _re_th
@@ -426,7 +435,7 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
             pass
 
     # Memoria emotiva di Simone (ultime voci, deduplicate)
-    emotional_log = Config.MEMORY_DIR / "emotional_log.json"
+    emotional_log = mem_dir / "emotional_log.json"
     if emotional_log.exists():
         try:
             entries = json.loads(_read_cached(emotional_log))
@@ -497,6 +506,9 @@ def _build_system_prompt(memory_context: str, history: "list[dict] | None" = Non
 
 class Brain:
     def __init__(self) -> None:
+        # SECURITY-STEP4: directory memoria per-utente
+        self._mem_dir = get_user_memory_dir(get_system_owner_id())
+
         self._client = OpenAI(
             api_key=Config.OPENROUTER_API_KEY,
             base_url=Config.OPENROUTER_BASE_URL,
@@ -504,6 +516,7 @@ class Brain:
         self._fallback_client = self._init_fallback_client()
         self._history: list[dict] = []
         self._history_times: list[str] = []
+        self._history_file = self._mem_dir / "active_history.json"
         self._load_history()
         from modules.web_search import text_search as _web_search_fn
         self._web_search_fn = _web_search_fn
@@ -512,7 +525,7 @@ class Brain:
         self._static_prompt: str = self._load_static_prompt()
 
         from modules.memory import Memory
-        self._memory = Memory()
+        self._memory = Memory(user_id=get_system_owner_id())
 
         from modules.actions import ActionDispatcher
         self._dispatcher = ActionDispatcher(web_search_fn=self._web_search)
@@ -655,7 +668,7 @@ class Brain:
             if identity.get("occupation"):
                 profile_restore["personal"]["lavoro"] = identity["occupation"]
 
-            write_json_atomic(Config.MEMORY_DIR / "profile.json", profile_restore)
+            write_json_atomic(self._mem_dir / "profile.json", profile_restore, permissions=0o600)
             self._memory.reload_profile()
             self._memory._bond_proposed = True
             self.invalidate_system_prompt()
@@ -663,12 +676,12 @@ class Brain:
             # Ripristina episodes.json
             eps = admin.get("memories", {}).get("episodes", [])
             if eps:
-                write_json_atomic(Config.MEMORY_DIR / "episodes.json", eps)
+                write_json_atomic(self._mem_dir / "episodes.json", eps, permissions=0o600)
 
             # Ripristina emotional_log
             elog = admin.get("emotional_state", {}).get("emotional_log_last10", [])
             if elog:
-                write_json_atomic(Config.MEMORY_DIR / "emotional_log.json", elog)
+                write_json_atomic(self._mem_dir / "emotional_log.json", elog, permissions=0o600)
 
             # Ripristina patterns.json da admin["patterns"] (C)
             _pat_data = admin.get("patterns", {"daily": {}, "summary": {}})
@@ -744,7 +757,7 @@ class Brain:
 
         # Goals attivi
         goals_count = 0
-        goals_file = Config.MEMORY_DIR / "goals.json"
+        goals_file = self._mem_dir / "goals.json"
         if goals_file.exists():
             try:
                 import json
@@ -812,7 +825,7 @@ class Brain:
             admin["relationship"]["password_salt"] = new_salt
 
             # Copia episodi recenti
-            ep_file = Config.MEMORY_DIR / "episodes.json"
+            ep_file = self._mem_dir / "episodes.json"
             if ep_file.exists():
                 try:
                     admin["memories"]["episodes"] = json.loads(ep_file.read_text())[-10:]
@@ -820,7 +833,7 @@ class Brain:
                     pass
 
             # Copia emotional_log
-            elog_file = Config.MEMORY_DIR / "emotional_log.json"
+            elog_file = self._mem_dir / "emotional_log.json"
             if elog_file.exists():
                 try:
                     admin["emotional_state"]["emotional_log_last10"] = json.loads(
@@ -923,7 +936,7 @@ class Brain:
             ep_ctx = self._episodic_memory.build_context(n=4, query=last_user_msg)
             if ep_ctx:
                 memory_ctx = memory_ctx + "\n\n" + ep_ctx if memory_ctx else ep_ctx
-        self._system_prompt_cache = _build_system_prompt(memory_ctx, self._history, self._static_prompt)
+        self._system_prompt_cache = _build_system_prompt(memory_ctx, self._history, self._static_prompt, mem_dir=self._mem_dir)
         self._system_prompt_ts = time.time()
         return self._system_prompt_cache
 
@@ -1321,7 +1334,7 @@ class Brain:
             "i tuoi pensieri", "a cosa hai pensato",
         ]
         if any(kw in _tr_msg for kw in _PENSIERI_KEYWORDS):
-            thoughts_file = Config.MEMORY_DIR / "thoughts.md"
+            thoughts_file = self._mem_dir / "thoughts.md"
             thoughts_raw = ""
             if thoughts_file.exists():
                 try:
@@ -1430,11 +1443,11 @@ class Brain:
                     if m:
                         entry = json.loads(m.group())
                         entry["timestamp"] = datetime.now().isoformat()
-                        elog = Config.MEMORY_DIR / "emotional_log.json"
+                        elog = self._mem_dir / "emotional_log.json"
                         entries = json.loads(elog.read_text()) if elog.exists() else []
                         entries.append(entry)
                         entries = entries[-100:]  # tieni ultimi 100
-                        write_json_atomic(elog, entries)
+                        write_json_atomic(elog, entries, permissions=0o600)
             except Exception:
                 pass
 
@@ -1456,7 +1469,7 @@ class Brain:
                         if satisfaction_raw:
                             score = float(satisfaction_raw.strip())
                             score = max(-1.0, min(1.0, score))
-                            ffile = Config.MEMORY_DIR / "feedback_weights.json"
+                            ffile = self._mem_dir / "feedback_weights.json"
                             weights = json.loads(ffile.read_text()) if ffile.exists() else {}
                             key = "conversazione"
                             if key not in weights:
@@ -1464,7 +1477,7 @@ class Brain:
                             n = weights[key]["samples"]
                             weights[key]["score"] = (weights[key]["score"] * n + score) / (n + 1)
                             weights[key]["samples"] = n + 1
-                            write_json_atomic(ffile, weights)
+                            write_json_atomic(ffile, weights, permissions=0o600)
             except Exception:
                 pass
 
@@ -1510,7 +1523,7 @@ class Brain:
                                     )
                                 if _personal.get("lavoro"):
                                     _admin["identity"]["occupation"] = _personal["lavoro"]
-                                _ep_f = Config.MEMORY_DIR / "episodes.json"
+                                _ep_f = self._mem_dir / "episodes.json"
                                 if _ep_f.exists():
                                     try:
                                         _admin["memories"]["episodes"] = json.loads(
@@ -1518,7 +1531,7 @@ class Brain:
                                         )[-10:]
                                     except Exception:
                                         pass
-                                _elog_f = Config.MEMORY_DIR / "emotional_log.json"
+                                _elog_f = self._mem_dir / "emotional_log.json"
                                 if _elog_f.exists():
                                     try:
                                         _admin["emotional_state"]["emotional_log_last10"] = json.loads(
@@ -1659,8 +1672,6 @@ class Brain:
 
     # ── Persistenza history ───────────────────────────────────────────
 
-    _HISTORY_FILE = Config.MEMORY_DIR / "active_history.json"
-
     def _load_history(self) -> None:
         """Carica la history da disco, filtra i messaggi scaduti, popola self._history e self._history_times."""
         from datetime import timedelta
@@ -1673,8 +1684,8 @@ class Brain:
         loaded_times:   list[str]  = []
 
         try:
-            if self._HISTORY_FILE.exists():
-                data = json.loads(self._HISTORY_FILE.read_text(encoding="utf-8"))
+            if self._history_file.exists():
+                data = json.loads(self._history_file.read_text(encoding="utf-8"))
                 for entry in data:
                     role    = entry.get("role", "")
                     content = entry.get("content", "")
@@ -1723,7 +1734,7 @@ class Brain:
                 {**self._history[i], "ts": self._history_times[i]}
                 for i in range(min_len)
             ]
-            write_json_atomic(self._HISTORY_FILE, entries)
+            write_json_atomic(self._history_file, entries, permissions=0o600)
         except Exception:
             pass
 
@@ -1810,7 +1821,8 @@ class Brain:
         import shutil
         from pathlib import Path
 
-        mem = Config.MEMORY_DIR
+        # SECURITY-STEP4: usa self._mem_dir (per-utente) per Tabula Rasa
+        mem = self._mem_dir
         base = Config.BASE_DIR
 
         # ── Resetta file JSON ─────────────────────────────────────────────
@@ -1842,7 +1854,7 @@ class Brain:
             },
         }
         for fname, empty in _json_resets.items():
-            write_json_atomic(mem / fname, empty)
+            write_json_atomic(mem / fname, empty, permissions=0o600)
 
         # admin.json è permanente — mai cancellare
         # Se esiste un legame, preserva bond_proposed = True nel profilo appena resettato
@@ -1852,7 +1864,7 @@ class Brain:
                 _pf = mem / "profile.json"
                 _pd = json.loads(_pf.read_text())
                 _pd["bond_proposed"] = True
-                write_json_atomic(_pf, _pd)
+                write_json_atomic(_pf, _pd, permissions=0o600)
         except Exception:
             pass
 
@@ -1862,11 +1874,13 @@ class Brain:
             _pat_tr.unlink()
 
         # ── Svuota file markdown ──────────────────────────────────────────
+        import os as _os_tr
         for mdfile in ["thoughts.md", "voice_notes.md", "pattern_insights.md",
                        "goals.md", "daily_summaries.md"]:
             fpath = mem / mdfile
             if fpath.exists():
                 fpath.write_text("", encoding="utf-8")
+                _os_tr.chmod(fpath, 0o600)
 
         # ── Cancella file opzionali se esistono ──────────────────────────
         for optional in ["pending_impact.json", "morning_pattern.json", "realtime_context.json"]:

@@ -83,6 +83,18 @@ def init_brain():
     console.print("\n[bold]Inizializzazione Cipher Server...[/bold]")
 
     brain    = Brain()
+
+    # ── SECURITY-STEP4: avviso file orfani nella root memory/ ─────────
+    _orphans = [
+        f.name for f in Config.MEMORY_DIR.iterdir()
+        if f.is_file() and f.suffix in (".json", ".md")
+    ] if Config.MEMORY_DIR.exists() else []
+    if _orphans:
+        console.print(
+            f"[yellow]⚠️  File orfani in {Config.MEMORY_DIR} (dovrebbero stare in user_*/): "
+            f"{', '.join(sorted(_orphans[:10]))}[/yellow]"
+        )
+
     listener = Listener()
     voice    = Voice()
 
@@ -177,7 +189,7 @@ def convert_to_pcm(audio_bytes: bytes, content_type: str = "") -> bytes:
 def health():
     from modules import llm_usage
     from modules.admin_manager import admin_exists
-    profile_file = Config.MEMORY_DIR / "profile.json"
+    profile_file = get_user_memory_dir(get_system_owner_id()) / "profile.json"
     confidence = 0.0
     if profile_file.exists():
         try:
@@ -224,7 +236,7 @@ def get_memory():
 
 @app.route("/memory/interests", methods=["GET"])
 def get_interests():
-    interests_file = Config.MEMORY_DIR / "cipher_interests.json"
+    interests_file = get_user_memory_dir(get_system_owner_id()) / "cipher_interests.json"
     if not interests_file.exists():
         return jsonify({"interests": []})
     try:
@@ -300,7 +312,7 @@ def consciousness_status():
 
 @app.route("/consciousness/thoughts", methods=["GET"])
 def consciousness_thoughts():
-    thoughts_file = Config.MEMORY_DIR / "thoughts.md"
+    thoughts_file = get_user_memory_dir(get_system_owner_id()) / "thoughts.md"
     if not thoughts_file.exists():
         return jsonify({"thoughts": "Nessun pensiero ancora."})
     try:
@@ -312,7 +324,7 @@ def consciousness_thoughts():
 
 @app.route("/consciousness/goals", methods=["GET"])
 def consciousness_goals():
-    goals_file = Config.MEMORY_DIR / "goals.md"
+    goals_file = get_user_memory_dir(get_system_owner_id()) / "goals.md"
     if not goals_file.exists():
         return jsonify({"goals": "Nessun obiettivo attivo."})
     try:
@@ -349,7 +361,7 @@ def serve_web():
 def dashboard_data():
     import json
     from datetime import datetime, timedelta
-    mem = Config.MEMORY_DIR
+    mem = get_user_memory_dir(get_system_owner_id())
 
     # profile.json
     profile = {}
@@ -512,7 +524,7 @@ def chat_history():
 # secure_filename aggiunto in files_upload per sanitizzare f.filename.
 
 from modules.path_guard import get_path_guard, PathTraversalError
-from modules.auth import get_current_user_id
+from modules.auth import get_current_user_id, get_user_memory_dir, get_system_owner_id
 
 
 def _pg_validate(path: str, operation: str):

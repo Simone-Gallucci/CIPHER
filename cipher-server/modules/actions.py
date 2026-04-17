@@ -180,7 +180,8 @@ class ActionDispatcher:
 
         since   = params.get("since", "last_check")
         proj    = Config.BASE_DIR
-        marker  = Config.MEMORY_DIR / "last_project_check.txt"
+        from modules.auth import get_user_memory_dir, get_system_owner_id
+        marker  = get_user_memory_dir(get_system_owner_id()) / "last_project_check.txt"
         MAX_DIFF_CHARS = 4000
 
         def _git(args: list[str]) -> tuple[str, int]:
@@ -950,9 +951,10 @@ except Exception as e:
         import json as _json
         from config import Config
 
+        from modules.auth import get_user_memory_dir, get_system_owner_id
         days = int(params.get("days", 7))
         fmt = params.get("format", "txt").lower()
-        conv_dir = Config.MEMORY_DIR / "conversations"
+        conv_dir = get_user_memory_dir(get_system_owner_id()) / "conversations"
 
         if not conv_dir.exists():
             return "Nessuna conversazione salvata."

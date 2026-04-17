@@ -13,11 +13,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+import os
+
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 # ── Paths ─────────────────────────────────────────────────────────────
-ETHICS_LOG   = Config.MEMORY_DIR / "ethics_log.md"
-LEARNED_FILE = Config.MEMORY_DIR / "ethics_learned.json"
+_MEM_DIR     = get_user_memory_dir(get_system_owner_id())
+ETHICS_LOG   = _MEM_DIR / "ethics_log.md"
+LEARNED_FILE = _MEM_DIR / "ethics_learned.json"
 
 # ── Soglia approvazioni per sblocco autonomo ──────────────────────────
 LEARN_THRESHOLD = 3  # Dopo 3 approvazioni manuali, Cipher agisce da solo
@@ -98,10 +103,7 @@ class EthicsEngine:
         return {}
 
     def _save_learned(self) -> None:
-        LEARNED_FILE.write_text(
-            json.dumps(self._learned, indent=2, ensure_ascii=False),
-            encoding="utf-8"
-        )
+        write_json_atomic(LEARNED_FILE, self._learned, permissions=0o600)
 
     # ── Log ───────────────────────────────────────────────────────────
 
@@ -110,6 +112,7 @@ class EthicsEngine:
         entry = f"\n### {now} — `{action}`\n**Decisione:** {decision}\n**Motivo:** {reason}\n"
         with ETHICS_LOG.open("a", encoding="utf-8") as f:
             f.write(entry)
+        os.chmod(ETHICS_LOG, 0o600)
 
     # ── Core ──────────────────────────────────────────────────────────
 

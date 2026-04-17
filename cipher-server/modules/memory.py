@@ -1,5 +1,7 @@
 """
 modules/memory.py – Memoria persistente di Cipher
+
+SECURITY-STEP4: tutti i path di memoria derivano da get_user_memory_dir(user_id).
 """
 
 import json
@@ -10,15 +12,13 @@ from typing import Optional
 
 from rich.console import Console
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import write_json_atomic
 
 console = Console()
 
-PROFILE_FILE     = Config.MEMORY_DIR / "profile.json"
-CONV_DIR         = Config.MEMORY_DIR / "conversations"
 LEARNING_DIR     = Config.BASE_DIR / "apprendimento"
 BEHAVIOR_DIR     = Config.BASE_DIR / "comportamento"
-SHORT_TERM_FILE  = Config.MEMORY_DIR / "short_term.json"
 
 EMPTY_PROFILE = {
     "personal": {},
@@ -33,8 +33,13 @@ EMPTY_PROFILE = {
 
 
 class Memory:
-    def __init__(self) -> None:
-        CONV_DIR.mkdir(parents=True, exist_ok=True)
+    def __init__(self, user_id: str = "") -> None:
+        _uid = user_id or get_system_owner_id()
+        self._mem_dir        = get_user_memory_dir(_uid)
+        self._profile_file   = self._mem_dir / "profile.json"
+        self._conv_dir       = self._mem_dir / "conversations"
+        self._short_term_file = self._mem_dir / "short_term.json"
+        self._conv_dir.mkdir(parents=True, exist_ok=True)
         LEARNING_DIR.mkdir(parents=True, exist_ok=True)
         BEHAVIOR_DIR.mkdir(parents=True, exist_ok=True)
         self._profile               = self._load_profile()
@@ -49,16 +54,16 @@ class Memory:
         )
 
     def _load_profile(self) -> dict:
-        if PROFILE_FILE.exists():
+        if self._profile_file.exists():
             try:
-                return json.loads(PROFILE_FILE.read_text())
+                return json.loads(self._profile_file.read_text())
             except Exception:
                 pass
         return dict(EMPTY_PROFILE)
 
     def _save_profile(self) -> None:
         self._profile["updated_at"] = datetime.now().isoformat()
-        write_json_atomic(PROFILE_FILE, self._profile)
+        write_json_atomic(self._profile_file, self._profile, permissions=0o600)
 
     def update_profile(self, key: str, value: str, category: str = "personal") -> None:
         if category not in self._profile:
@@ -80,13 +85,13 @@ class Memory:
 
     def _new_session_file(self) -> Path:
         ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        return CONV_DIR / f"{ts}.json"
+        return self._conv_dir / f"{ts}.json"
 
     def _save_conversation(self) -> None:
         if not self._current_conv:
             return
         data = {"timestamp": datetime.now().isoformat(), "messages": self._current_conv}
-        write_json_atomic(self._session_file, data)
+        write_json_atomic(self._session_file, data, permissions=0o600)
 
     def add_message(self, role: str, content: str) -> None:
         self._current_conv.append({
@@ -97,7 +102,7 @@ class Memory:
         self._save_conversation()
 
     def _count_conversations(self) -> int:
-        return len(list(CONV_DIR.glob("*.json")))
+        return len(list(self._conv_dir.glob("*.json")))
 
     def build_context(self) -> str:
         parts = []
@@ -119,7 +124,7 @@ class Memory:
         # Legge keyword di argomenti chiusi per filtrare messaggi obsoleti
         _closed_keywords: list[str] = []
         try:
-            _checkin_file = Config.MEMORY_DIR / "checkin_history.json"
+            _checkin_file = self._mem_dir / "checkin_history.json"
             if _checkin_file.exists():
                 _checkin_data = json.loads(_checkin_file.read_text())
                 for _entry in _checkin_data:
@@ -130,7 +135,7 @@ class Memory:
         except Exception:
             pass
 
-        past_files = [f for f in sorted(CONV_DIR.glob("*.json")) if f != self._session_file]
+        past_files = [f for f in sorted(self._conv_dir.glob("*.json")) if f != self._session_file]
         if past_files:
             all_messages = []
             for fpath in reversed(past_files):
@@ -198,9 +203,9 @@ class Memory:
     # ------------------------------------------------------------------ #
 
     def _load_short_term(self) -> list:
-        if SHORT_TERM_FILE.exists():
+        if self._short_term_file.exists():
             try:
-                data = json.loads(SHORT_TERM_FILE.read_text())
+                data = json.loads(self._short_term_file.read_text())
                 # Scarta eventi più vecchi di 24 ore
                 now = datetime.now()
                 fresh = []
@@ -217,7 +222,7 @@ class Memory:
         return []
 
     def _save_short_term(self, events: list) -> None:
-        write_json_atomic(SHORT_TERM_FILE, events)
+        write_json_atomic(self._short_term_file, events, permissions=0o600)
 
     def add_short_term_event(self, description: str) -> None:
         events = self._load_short_term()
@@ -469,7 +474,7 @@ class Memory:
                     pass
                 self._bond_proposed = bool(self._profile.get("bond_proposed", False))
                 self._save_profile()
-                for f in CONV_DIR.glob("*.json"):
+                for f in self._conv_dir.glob("*.json"):
                     f.unlink()
                 # patterns.json va cancellato: è dati comportamentali legati all'utente
                 _pat_f = Config.DATA_DIR / "patterns.json"

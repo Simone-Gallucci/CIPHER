@@ -6,18 +6,15 @@ Gli obiettivi nascono dalla riflessione, dalla curiosità e dal contesto.
 """
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from openai import OpenAI
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import extract_llm_json, write_json_atomic
-
-# ── Paths ─────────────────────────────────────────────────────────────
-GOALS_FILE    = Config.MEMORY_DIR / "goals.md"
-GOALS_JSON    = Config.MEMORY_DIR / "goals.json"
-OUTCOME_LOG   = Config.MEMORY_DIR / "outcome_log.json"
 
 # ── Tipi di obiettivo ─────────────────────────────────────────────────
 GOAL_TYPES = {
@@ -82,8 +79,14 @@ Rispondi SOLO con un JSON valido, senza markdown, senza backtick, senza testo ag
 
 
 class GoalManager:
-    def __init__(self) -> None:
-        GOALS_FILE.touch(exist_ok=True)
+    def __init__(self, mem_dir: "Path | None" = None) -> None:
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        self._goals_file  = _dir / "goals.md"
+        self._goals_json  = _dir / "goals.json"
+        self._outcome_log = _dir / "outcome_log.json"
+        self._thoughts_file = _dir / "thoughts.md"
+        self._goals_file.touch(exist_ok=True)
+        os.chmod(self._goals_file, 0o600)
         self._goals: list[dict] = self._load_goals()
         self._client = OpenAI(
             api_key=Config.OPENROUTER_API_KEY,
@@ -94,16 +97,16 @@ class GoalManager:
     # ── Persistenza ───────────────────────────────────────────────────
 
     def _load_goals(self) -> list[dict]:
-        if GOALS_JSON.exists():
+        if self._goals_json.exists():
             try:
-                data = json.loads(GOALS_JSON.read_text(encoding="utf-8"))
+                data = json.loads(self._goals_json.read_text(encoding="utf-8"))
                 return data.get("goals", [])
             except Exception:
                 return []
         return []
 
     def _save_goals(self) -> None:
-        write_json_atomic(GOALS_JSON, {"goals": self._goals})
+        write_json_atomic(self._goals_json, {"goals": self._goals}, permissions=0o600)
         self._write_markdown()
 
     def _write_markdown(self) -> None:
@@ -131,7 +134,8 @@ class GoalManager:
             for g in done[-10:]:
                 lines.append(f"- ~~{g['title']}~~ *(completato {g.get('completed_at', '')})*\n")
 
-        GOALS_FILE.write_text("".join(lines), encoding="utf-8")
+        self._goals_file.write_text("".join(lines), encoding="utf-8")
+        os.chmod(self._goals_file, 0o600)
 
     # ── Proprietà ─────────────────────────────────────────────────────
 
@@ -313,8 +317,8 @@ class GoalManager:
         """Appende un record action→outcome al log degli esiti per il ciclo di apprendimento."""
         try:
             data = []
-            if OUTCOME_LOG.exists():
-                data = json.loads(OUTCOME_LOG.read_text(encoding="utf-8"))
+            if self._outcome_log.exists():
+                data = json.loads(self._outcome_log.read_text(encoding="utf-8"))
             data.append({
                 "title":      goal.get("title", ""),
                 "type":       goal.get("type", ""),
@@ -325,16 +329,16 @@ class GoalManager:
                 "created_at": goal.get("created_at", ""),
                 "resolved_at": datetime.now().isoformat(),
             })
-            write_json_atomic(OUTCOME_LOG, data[-50:])
+            write_json_atomic(self._outcome_log, data[-50:], permissions=0o600)
         except Exception:
             pass
 
     def outcome_context(self, n: int = 5) -> str:
         """Ultimi N esiti come testo leggibile per i prompt LLM."""
         try:
-            if not OUTCOME_LOG.exists():
+            if not self._outcome_log.exists():
                 return "Nessun esito registrato."
-            data = json.loads(OUTCOME_LOG.read_text(encoding="utf-8"))
+            data = json.loads(self._outcome_log.read_text(encoding="utf-8"))
             if not data:
                 return "Nessun esito registrato."
             lines = []
@@ -376,10 +380,10 @@ class GoalManager:
     # ── Log ───────────────────────────────────────────────────────────
 
     def _log_new_goals(self, goals: list[dict]) -> None:
-        thoughts_file = Config.MEMORY_DIR / "thoughts.md"
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         lines = [f"\n---\n## {now} 🎯 Nuovi obiettivi generati\n"]
         for g in goals:
             lines.append(f"- **[{g['type'].upper()}]** {g['title']}: {g['description']}\n")
-        with thoughts_file.open("a", encoding="utf-8") as f:
+        with self._thoughts_file.open("a", encoding="utf-8") as f:
             f.write("".join(lines))
+        os.chmod(self._thoughts_file, 0o600)

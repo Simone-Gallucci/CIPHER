@@ -22,11 +22,12 @@ import logging
 from typing import Optional
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import write_json_atomic
 
 log = logging.getLogger("cipher.contacts")
 
-CONTACTS_FILE = Config.MEMORY_DIR / "contacts.json"
+CONTACTS_FILE = get_user_memory_dir(get_system_owner_id()) / "contacts.json"
 
 
 def _load() -> dict:
@@ -40,7 +41,7 @@ def _load() -> dict:
 
 
 def _save(contacts: dict) -> None:
-    write_json_atomic(CONTACTS_FILE, contacts)
+    write_json_atomic(CONTACTS_FILE, contacts, permissions=0o600)
 
 
 def _normalize(name: str) -> str:

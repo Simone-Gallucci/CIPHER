@@ -3,20 +3,20 @@ modules/self_reflection.py – Auto-riflessione e memoria di Cipher
 
 Cipher riflette su sé stesso, aggiorna il suo stato emotivo
 e scrive i pensieri su memory/thoughts.md
+
+SECURITY-STEP4: accetta mem_dir in __init__ per path per-utente.
 """
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from openai import OpenAI
 from config import Config
-from modules.utils import extract_llm_json
-
-# ── Paths ─────────────────────────────────────────────────────────────
-THOUGHTS_FILE = Config.MEMORY_DIR / "thoughts.md"
-STATE_FILE    = Config.MEMORY_DIR / "cipher_state.json"
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import extract_llm_json, write_json_atomic
 
 # ── Stati emotivi possibili ───────────────────────────────────────────
 EMOTIONAL_STATES = ["curious", "content", "bored", "frustrated", "protective", "neutral"]
@@ -73,8 +73,12 @@ Rispondi SOLO con un JSON valido in questo formato, senza markdown, senza backti
 
 
 class SelfReflection:
-    def __init__(self, episodic_memory=None, cipher_interests=None) -> None:
-        THOUGHTS_FILE.touch(exist_ok=True)
+    def __init__(self, episodic_memory=None, cipher_interests=None, mem_dir: "Path | None" = None) -> None:
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        self._thoughts_file = _dir / "thoughts.md"
+        self._state_file    = _dir / "cipher_state.json"
+        self._thoughts_file.touch(exist_ok=True)
+        os.chmod(self._thoughts_file, 0o600)
         self._state           = self._load_state()
         self._episodic        = episodic_memory   # EpisodicMemory (opzionale)
         self._cipher_interests = cipher_interests  # CipherInterests (opzionale)
@@ -87,9 +91,9 @@ class SelfReflection:
     # ── Persistenza stato ─────────────────────────────────────────────
 
     def _load_state(self) -> dict:
-        if STATE_FILE.exists():
+        if self._state_file.exists():
             try:
-                return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+                return json.loads(self._state_file.read_text(encoding="utf-8"))
             except Exception:
                 pass
         return {
@@ -105,10 +109,7 @@ class SelfReflection:
         }
 
     def _save_state(self) -> None:
-        STATE_FILE.write_text(
-            json.dumps(self._state, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        write_json_atomic(self._state_file, self._state, permissions=0o600)
 
     # ── Proprietà pubbliche ───────────────────────────────────────────
 
@@ -273,10 +274,10 @@ class SelfReflection:
 
     def _is_duplicate_thought(self, new_text: str) -> bool:
         """True se il nuovo pensiero condivide > 60% delle keyword con uno degli ultimi 10."""
-        if not THOUGHTS_FILE.exists():
+        if not self._thoughts_file.exists():
             return False
         try:
-            content = THOUGHTS_FILE.read_text(encoding="utf-8")
+            content = self._thoughts_file.read_text(encoding="utf-8")
             blocks = [b.strip() for b in content.split("---") if b.strip()]
             recent = blocks[-10:]
             new_kw = self._extract_keywords(new_text)
@@ -295,10 +296,10 @@ class SelfReflection:
 
     def _is_duplicate_concern(self, concern: str) -> bool:
         """True se la preoccupazione è simile a una delle ultime 5 già scritte."""
-        if not THOUGHTS_FILE.exists():
+        if not self._thoughts_file.exists():
             return False
         try:
-            content = THOUGHTS_FILE.read_text(encoding="utf-8")
+            content = self._thoughts_file.read_text(encoding="utf-8")
             blocks = [b.strip() for b in content.split("---") if b.strip()]
             recent_concerns = [
                 b for b in blocks[-10:] if "Preoccupazione:" in b
@@ -319,17 +320,18 @@ class SelfReflection:
 
     def _trim_thoughts_file(self, max_blocks: int = 100) -> None:
         """Mantiene solo gli ultimi max_blocks blocchi in thoughts.md."""
-        if not THOUGHTS_FILE.exists():
+        if not self._thoughts_file.exists():
             return
         try:
-            content = THOUGHTS_FILE.read_text(encoding="utf-8")
+            content = self._thoughts_file.read_text(encoding="utf-8")
             blocks = [b.strip() for b in content.split("---") if b.strip()]
             if len(blocks) > max_blocks:
                 blocks = blocks[-max_blocks:]
-                THOUGHTS_FILE.write_text(
+                self._thoughts_file.write_text(
                     "\n\n---\n\n".join(blocks) + "\n",
                     encoding="utf-8",
                 )
+                os.chmod(self._thoughts_file, 0o600)
         except Exception:
             pass
 
@@ -378,8 +380,9 @@ class SelfReflection:
         if result.get("want_to_explore"):
             lines.append(f"**💡 Voglio esplorare:** {result['want_to_explore']}\n")
 
-        with THOUGHTS_FILE.open("a", encoding="utf-8") as f:
+        with self._thoughts_file.open("a", encoding="utf-8") as f:
             f.write("".join(lines))
+        os.chmod(self._thoughts_file, 0o600)
 
         # Mantieni massimo 100 blocchi
         self._trim_thoughts_file(max_blocks=100)

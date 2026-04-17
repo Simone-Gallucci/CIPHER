@@ -17,10 +17,12 @@ import requests
 from rich.console import Console
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 console = Console()
 
-REALTIME_FILE = Config.MEMORY_DIR / "realtime_context.json"
+REALTIME_FILE = get_user_memory_dir(get_system_owner_id()) / "realtime_context.json"
 
 # Topic notizie: abbina interessi fissi + campo di Simone
 NEWS_QUERIES = [
@@ -44,10 +46,7 @@ class RealtimeContext:
             "weather":   weather,
             "news":      news,
         }
-        REALTIME_FILE.write_text(
-            json.dumps(snapshot, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(REALTIME_FILE, snapshot, permissions=0o600)
         console.print("[dim]🌐 Contesto real-time aggiornato[/dim]")
 
     def build_context(self) -> str:

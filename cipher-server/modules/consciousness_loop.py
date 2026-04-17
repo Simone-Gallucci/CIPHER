@@ -18,8 +18,9 @@ import requests
 from rich.console import Console
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.ethics_engine import EthicsEngine
-from modules.utils import strip_action_json
+from modules.utils import strip_action_json, write_json_atomic
 from modules.self_reflection import SelfReflection
 from modules.goal_manager import GoalManager
 from modules.episodic_memory import EpisodicMemory
@@ -46,9 +47,6 @@ MAX_CONSENT_ATTEMPTS = 3
 
 # ── Telegram ──────────────────────────────────────────────────────────
 TELEGRAM_API = f"https://api.telegram.org/bot{Config.TELEGRAM_BOT_TOKEN}"
-
-
-_MORNING_PATTERN_FILE = Config.MEMORY_DIR / "morning_pattern.json"
 
 
 def _parse_birthday(text: str) -> "tuple[int, int] | None":
@@ -82,7 +80,7 @@ def _parse_birthday(text: str) -> "tuple[int, int] | None":
     return None
 
 
-def _get_birthday() -> "tuple[int, int] | None":
+def _get_birthday(mem_dir=None) -> "tuple[int, int] | None":
     """
     Ritorna (mese, giorno) del compleanno dell'utente, o None.
     Priorità: 1) Config.BIRTHDAY_MONTH/DAY  2) profile.json (personal + facts)
@@ -90,7 +88,8 @@ def _get_birthday() -> "tuple[int, int] | None":
     if Config.BIRTHDAY_MONTH and Config.BIRTHDAY_DAY:
         return (Config.BIRTHDAY_MONTH, Config.BIRTHDAY_DAY)
     try:
-        profile_path = Config.MEMORY_DIR / "profile.json"
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        profile_path = _dir / "profile.json"
         if not profile_path.exists():
             return None
         profile = json.loads(profile_path.read_text(encoding="utf-8"))
@@ -116,7 +115,7 @@ def _get_birthday() -> "tuple[int, int] | None":
     return None
 
 
-def _get_italian_holiday(dt: datetime) -> Optional[str]:
+def _get_italian_holiday(dt: datetime, mem_dir=None) -> Optional[str]:
     """Restituisce il nome della festività italiana per la data data, o None."""
     month, day, year = dt.month, dt.day, dt.year
 
@@ -136,7 +135,7 @@ def _get_italian_holiday(dt: datetime) -> Optional[str]:
         return fixed[(month, day)]
 
     # Compleanno utente (.env oppure profile.json)
-    _bday = _get_birthday()
+    _bday = _get_birthday(mem_dir=mem_dir)
     if _bday and month == _bday[0] and day == _bday[1]:
         return "Compleanno dell'utente"
 
@@ -169,11 +168,13 @@ def _get_italian_holiday(dt: datetime) -> Optional[str]:
     return None
 
 
-def _learned_brief_time() -> tuple[int, int]:
+def _learned_brief_time(mem_dir=None) -> tuple[int, int]:
     """Ritorna (ora, minuto) ottimale per il brief basato sull'apprendimento. Standalone."""
     try:
-        if _MORNING_PATTERN_FILE.exists():
-            data = json.loads(_MORNING_PATTERN_FILE.read_text())
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        _mpf = _dir / "morning_pattern.json"
+        if _mpf.exists():
+            data = json.loads(_mpf.read_text())
             if data.get("samples", 0) >= 3:
                 avg = int(data["avg_minutes"])
                 target = max(7 * 60, avg - 15)
@@ -236,9 +237,13 @@ class ConsciousnessLoop:
         self._brain      = brain
         self._voice      = voice
         self._ethics     = EthicsEngine()
+
+        # SECURITY-STEP4: directory memoria per-utente
+        self._mem_dir = get_user_memory_dir(get_system_owner_id())
+
         # ── Nuovi moduli ──────────────────────────────────────────────
-        self._episodic       = EpisodicMemory()
-        self._interests      = CipherInterests()
+        self._episodic       = EpisodicMemory(mem_dir=self._mem_dir)
+        self._interests      = CipherInterests(mem_dir=self._mem_dir)
         self._patterns       = PatternLearner(brain=brain)
         self._discretion     = DiscretionEngine()
         self._realtime       = RealtimeContext(cipher_interests=self._interests)
@@ -247,8 +252,9 @@ class ConsciousnessLoop:
         self._reflection = SelfReflection(
             episodic_memory=self._episodic,
             cipher_interests=self._interests,
+            mem_dir=self._mem_dir,
         )
-        self._goals = GoalManager()
+        self._goals = GoalManager(mem_dir=self._mem_dir)
 
         self._running       = False
         self._thread        = None
@@ -278,6 +284,7 @@ class ConsciousnessLoop:
             pattern_learner=self._patterns,
             cipher_interests=self._interests,
             notify_fn=self._notify,
+            mem_dir=self._mem_dir,
         )
 
         # Collega i moduli al Brain se disponibile
@@ -286,7 +293,7 @@ class ConsciousnessLoop:
             brain._episodic_memory = self._episodic
 
         # File per tracciare storico check-in (anti-ripetizione)
-        self._checkin_history_file = Config.MEMORY_DIR / "checkin_history.json"
+        self._checkin_history_file = self._mem_dir / "checkin_history.json"
 
         console.print("[green]✓ ConsciousnessLoop inizializzato[/green]")
 
@@ -469,10 +476,7 @@ class ConsciousnessLoop:
 
     def _save_checkin_history(self, history: list) -> None:
         try:
-            self._checkin_history_file.write_text(
-                json.dumps(history, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            write_json_atomic(self._checkin_history_file, history, permissions=0o600)
         except Exception:
             pass
 
@@ -615,7 +619,7 @@ class ConsciousnessLoop:
         current_time = _now.strftime("%H:%M")
         current_day  = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"][_now.weekday()]
 
-        holiday = _get_italian_holiday(_now)
+        holiday = _get_italian_holiday(_now, mem_dir=self._mem_dir)
         holiday_context = (
             f"\n⚠️ OGGI È {holiday.upper()}. L'utente non lavora e non ha impegni scolastici o professionali. "
             f"NON menzionare lavoro, stage, scuola, produttività, impegni o piani lavorativi. "
@@ -682,7 +686,7 @@ class ConsciousnessLoop:
         # Leggi ultimo stato emotivo di Simone dall'emotional log
         simone_emotional_context = ""
         try:
-            elog_path = Config.MEMORY_DIR / "emotional_log.json"
+            elog_path = self._mem_dir / "emotional_log.json"
             if elog_path.exists():
                 _entries = json.loads(elog_path.read_text(encoding="utf-8"))
                 if _entries:
@@ -842,12 +846,11 @@ class ConsciousnessLoop:
 
     # ── Brief adattivo — impara orario mattutino ─────────────────────
 
-    _MORNING_PATTERN_FILE = Config.MEMORY_DIR / "morning_pattern.json"
-
     def _record_morning_response(self, now: datetime) -> None:
         """Registra l'orario della prima risposta mattutina e aggiorna la media."""
         try:
-            data = json.loads(self._MORNING_PATTERN_FILE.read_text()) if self._MORNING_PATTERN_FILE.exists() else {}
+            _mpf = self._mem_dir / "morning_pattern.json"
+            data = json.loads(_mpf.read_text()) if _mpf.exists() else {}
             today = now.strftime("%Y-%m-%d")
             if data.get("last_date") == today:
                 return  # già registrato oggi
@@ -856,13 +859,13 @@ class ConsciousnessLoop:
             avg = data.get("avg_minutes", now.hour * 60 + now.minute)
             new_avg = (avg * n + minutes_since_midnight) / (n + 1)
             data.update({"avg_minutes": new_avg, "samples": n + 1, "last_date": today})
-            self._MORNING_PATTERN_FILE.write_text(json.dumps(data, indent=2))
+            write_json_atomic(_mpf, data, permissions=0o600)
         except Exception:
             pass
 
     def get_learned_brief_time(self) -> tuple[int, int]:
         """Ritorna (ora, minuto) ottimale per il brief basato sull'apprendimento."""
-        return _learned_brief_time()
+        return _learned_brief_time(mem_dir=self._mem_dir)
 
     # ── Auto-ispezione ────────────────────────────────────────────────
 
@@ -960,7 +963,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
 
         # ── 1. Check festività + calendario ──────────────────────────────────
         cal_msg = ""
-        holiday = _get_italian_holiday(now)
+        holiday = _get_italian_holiday(now, mem_dir=self._mem_dir)
 
         try:
             from modules.google_cal import GoogleCalendar
@@ -986,7 +989,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
             try:
                 import re as _re
                 from datetime import date as _date
-                summaries_file = Config.MEMORY_DIR / "daily_summaries.md"
+                summaries_file = self._mem_dir / "daily_summaries.md"
                 if summaries_file.exists():
                     content = summaries_file.read_text(encoding="utf-8")
                     sections = content.strip().split("---")
@@ -1022,7 +1025,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                 # Prova a caricare il nome dell'utente da profile.json
                 _nome_utente = ""
                 try:
-                    _pf = json.loads((Config.MEMORY_DIR / "profile.json").read_text(encoding="utf-8"))
+                    _pf = json.loads((self._mem_dir / "profile.json").read_text(encoding="utf-8"))
                     _nome_utente = _pf.get("personal", {}).get("nome", "").strip()
                 except Exception:
                     pass
@@ -1111,7 +1114,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
 
         # ── 3. Documenti di preparazione ──────────────────────────────────────
         # Il cal_msg viene preposto al primo documento per evitare due saluti separati.
-        brief_file = Config.MEMORY_DIR / "morning_brief.json"
+        brief_file = self._mem_dir / "morning_brief.json"
         docs_sent = False
         if brief_file.exists():
             try:
@@ -1136,10 +1139,7 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
                         self._notify(message)
                         docs_sent = True
                     brief["sent"] = True
-                    brief_file.write_text(
-                        json.dumps(brief, ensure_ascii=False, indent=2),
-                        encoding="utf-8",
-                    )
+                    write_json_atomic(brief_file, brief, permissions=0o600)
                     console.print(f"[green]📅 Morning brief inviato: {len(documents)} documento/i[/green]")
             except Exception:
                 pass
@@ -1426,11 +1426,13 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         note = params.get("note", goal.get("description", ""))
         if not note:
             return {"success": False, "error": "Nessuna nota da scrivere."}
-        thoughts_file = Config.MEMORY_DIR / "thoughts.md"
+        import os as _os
+        thoughts_file = self._mem_dir / "thoughts.md"
         now   = datetime.now().strftime("%Y-%m-%d %H:%M")
         entry = f"\n---\n## {now} 📝 Nota autonoma\n{note}\n"
         with thoughts_file.open("a", encoding="utf-8") as f:
             f.write(entry)
+        _os.chmod(thoughts_file, 0o600)
         return {"success": True, "output": "Nota scritta.", "notify": False}
 
     def _exec_write_file(self, params: dict, goal: dict) -> dict:

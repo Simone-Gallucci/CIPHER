@@ -10,9 +10,12 @@ poco esplorati decadono.
 import json
 import random
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 
 # Interessi innati di Cipher — definiscono la sua identità intellettuale
@@ -28,8 +31,10 @@ INITIAL_INTERESTS = [
 
 
 class CipherInterests:
-    def __init__(self):
-        self._file = Config.MEMORY_DIR / "cipher_interests.json"
+    def __init__(self, mem_dir: "Path | None" = None):
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        self._mem_dir = _dir
+        self._file = _dir / "cipher_interests.json"
         self._interests: list[dict] = self._load()
 
     # ── Persistenza ───────────────────────────────────────────────────
@@ -42,14 +47,11 @@ class CipherInterests:
                 pass
         # Prima inizializzazione
         data = [dict(i) for i in INITIAL_INTERESTS]
-        self._file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_json_atomic(self._file, data, permissions=0o600)
         return data
 
     def _save(self):
-        self._file.write_text(
-            json.dumps(self._interests, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(self._file, self._interests, permissions=0o600)
 
     # ── API pubblica ──────────────────────────────────────────────────
 
@@ -144,7 +146,7 @@ class CipherInterests:
         quelli le cui keyword compaiono nei fatti/preferenze salvati.
         Chiamare periodicamente (es. durante la riflessione).
         """
-        profile_path = Config.MEMORY_DIR / "profile.json"
+        profile_path = self._mem_dir / "profile.json"
         if not profile_path.exists():
             return
         try:

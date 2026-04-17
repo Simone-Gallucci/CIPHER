@@ -12,11 +12,12 @@ from pathlib import Path
 from threading import Lock
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.utils import write_json_atomic
 
 log = logging.getLogger("cipher.llm_usage")
 
-USAGE_FILE: Path = Config.MEMORY_DIR / "llm_usage.json"
+USAGE_FILE: Path = get_user_memory_dir(get_system_owner_id()) / "llm_usage.json"
 _MAX_DAYS = 30
 
 _lock = Lock()
@@ -35,7 +36,7 @@ def _load() -> dict:
 
 def _save() -> None:
     try:
-        write_json_atomic(USAGE_FILE, _data)
+        write_json_atomic(USAGE_FILE, _data, permissions=0o600)
     except Exception as e:
         log.warning("llm_usage save error: %s", e)
 

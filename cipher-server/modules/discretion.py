@@ -24,6 +24,8 @@ from typing import Optional
 from rich.console import Console
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 console = Console()
 
@@ -36,7 +38,7 @@ MAX_PER_HOUR = 1
 MAX_PER_DAY  = 4
 
 # ── File di stato ─────────────────────────────────────────────────────
-DISCRETION_FILE = Config.MEMORY_DIR / "discretion_state.json"
+DISCRETION_FILE = get_user_memory_dir(get_system_owner_id()) / "discretion_state.json"
 
 
 class DiscretionEngine:
@@ -54,10 +56,7 @@ class DiscretionEngine:
         return {"sent_log": []}
 
     def _save(self):
-        DISCRETION_FILE.write_text(
-            json.dumps(self._state, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(DISCRETION_FILE, self._state, permissions=0o600)
 
     # ── Conteggi ──────────────────────────────────────────────────────
 

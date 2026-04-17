@@ -14,6 +14,7 @@ Ogni notte alle 3:00 Cipher:
 """
 
 import json
+import os
 import threading
 import time
 from datetime import date, datetime
@@ -23,6 +24,8 @@ from typing import Optional
 from rich.console import Console
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 console = Console()
 
@@ -39,6 +42,7 @@ class NightCycle:
         pattern_learner=None,   # PatternLearner
         cipher_interests=None,  # CipherInterests
         notify_fn=None,         # callable(str) -> None
+        mem_dir: "Path | None" = None,
     ):
         self._brain           = brain
         self._episodic        = episodic_memory
@@ -46,8 +50,10 @@ class NightCycle:
         self._interests       = cipher_interests
         self._notify          = notify_fn
 
-        self._last_run_file   = Config.MEMORY_DIR / "night_cycle_last.json"
-        self._summaries_file  = Config.MEMORY_DIR / "daily_summaries.md"
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        self._mem_dir         = _dir
+        self._last_run_file   = _dir / "night_cycle_last.json"
+        self._summaries_file  = _dir / "daily_summaries.md"
         self._running         = False
         self._thread: Optional[threading.Thread] = None
 
@@ -121,6 +127,7 @@ class NightCycle:
                 entry = f"\n### Azioni del {today_str}\n{actions_summary}\n"
                 with self._summaries_file.open("a", encoding="utf-8") as f:
                     f.write(entry)
+                os.chmod(self._summaries_file, 0o600)
                 console.print(f"[dim]🌙 Azioni del giorno registrate nel sommario[/dim]")
         except Exception:
             pass
@@ -151,7 +158,7 @@ class NightCycle:
     # ── Helpers ───────────────────────────────────────────────────────
 
     def _read_todays_conversations(self) -> str:
-        conv_dir  = Config.MEMORY_DIR / "conversations"
+        conv_dir  = self._mem_dir / "conversations"
         if not conv_dir.exists():
             return ""
         today_str = date.today().isoformat()
@@ -187,9 +194,10 @@ class NightCycle:
         entry = f"\n---\n## {date_str} 🌙 Riflessione notturna\n{summary}\n"
         with self._summaries_file.open("a", encoding="utf-8") as f:
             f.write(entry)
+        os.chmod(self._summaries_file, 0o600)
 
     def _cleanup_old_conversations(self, days: int = 30):
-        conv_dir = Config.MEMORY_DIR / "conversations"
+        conv_dir = self._mem_dir / "conversations"
         if not conv_dir.exists():
             return
         cutoff  = datetime.now().timestamp() - (days * 86400)
@@ -239,11 +247,12 @@ class NightCycle:
             insights = self._brain._call_llm_quality(prompt, max_tokens=400)
             if not insights:
                 return
-            insights_file = Config.MEMORY_DIR / "pattern_insights.md"
+            insights_file = self._mem_dir / "pattern_insights.md"
             today_str = date.today().isoformat()
             entry = f"\n---\n## {today_str} 🧠 Ragionamento sui pattern\n{insights}\n"
             with insights_file.open("a", encoding="utf-8") as f:
                 f.write(entry)
+            os.chmod(insights_file, 0o600)
             console.print("[dim]🌙 Pattern insights aggiornati[/dim]")
         except Exception as e:
             console.print(f"[red]Errore _reason_about_patterns: {e}[/red]")
@@ -276,7 +285,7 @@ class NightCycle:
                 return
             new_data: dict = json.loads(match.group())
 
-            profile_file = Config.MEMORY_DIR / "profile.json"
+            profile_file = self._mem_dir / "profile.json"
             profile: dict = {}
             if profile_file.exists():
                 try:
@@ -298,10 +307,7 @@ class NightCycle:
             profile["motivations"] = existing
             profile["updated_at"] = datetime.now().isoformat()
 
-            profile_file.write_text(
-                json.dumps(profile, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            write_json_atomic(profile_file, profile, permissions=0o600)
             console.print("[dim]🌙 Profilo motivazionale aggiornato[/dim]")
         except Exception as e:
             console.print(f"[red]Errore _update_motivational_profile: {e}[/red]")
@@ -420,16 +426,13 @@ class NightCycle:
             return
 
         # Salva lista per l'invio mattutino
-        brief_file = Config.MEMORY_DIR / "morning_brief.json"
+        brief_file = self._mem_dir / "morning_brief.json"
         brief_data = {
             "date":      tomorrow_str,
             "sent":      False,
             "documents": prepared_docs,
         }
-        brief_file.write_text(
-            json.dumps(brief_data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(brief_file, brief_data, permissions=0o600)
         console.print(f"[green]🌙 Morning brief pronto: {len(prepared_docs)} documento/i[/green]")
 
     def _update_voice_notes(self, conversations_text: str):
@@ -456,11 +459,12 @@ class NightCycle:
             notes = self._brain._call_llm_quality(prompt, max_tokens=300)
             if not notes:
                 return
-            voice_file = Config.MEMORY_DIR / "voice_notes.md"
+            voice_file = self._mem_dir / "voice_notes.md"
             today_str  = date.today().isoformat()
             entry      = f"\n---\n## {today_str} 🎙️ Come parlavo oggi\n{notes}\n"
             with voice_file.open("a", encoding="utf-8") as f:
                 f.write(entry)
+            os.chmod(voice_file, 0o600)
             console.print("[dim]🌙 Note sulla voce aggiornate[/dim]")
         except Exception as e:
             console.print(f"[red]Errore _update_voice_notes: {e}[/red]")
@@ -482,6 +486,4 @@ class NightCycle:
         return None
 
     def _mark_ran(self):
-        self._last_run_file.write_text(
-            json.dumps({"date": date.today().isoformat()})
-        )
+        write_json_atomic(self._last_run_file, {"date": date.today().isoformat()}, permissions=0o600)

@@ -4,13 +4,18 @@ modules/episodic_memory.py – Memoria episodica strutturata di Cipher
 Registra eventi significativi con timestamp e tag, permettendo a Cipher
 di ricordare episodi specifici ("quel giorno Simone era nervoso...") invece
 di solo lo stato emotivo corrente.
+
+SECURITY-STEP4: accetta mem_dir in __init__ per path per-utente.
 """
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
+from modules.utils import write_json_atomic
 
 
 EPISODE_TYPES = {
@@ -27,8 +32,9 @@ MAX_EPISODES = 500
 
 
 class EpisodicMemory:
-    def __init__(self):
-        self._file = Config.MEMORY_DIR / "episodes.json"
+    def __init__(self, mem_dir: "Path | None" = None):
+        _dir = mem_dir or get_user_memory_dir(get_system_owner_id())
+        self._file = _dir / "episodes.json"
         self._episodes: list[dict] = self._load()
 
     # ── Persistenza ───────────────────────────────────────────────────
@@ -42,10 +48,7 @@ class EpisodicMemory:
         return []
 
     def _save(self):
-        self._file.write_text(
-            json.dumps(self._episodes, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json_atomic(self._file, self._episodes, permissions=0o600)
 
     # ── API pubblica ──────────────────────────────────────────────────
 

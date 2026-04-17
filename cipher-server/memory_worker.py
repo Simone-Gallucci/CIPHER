@@ -4,6 +4,8 @@ memory_worker.py – Servizio autonomo di consolidamento memoria
 Gira come processo separato (cipher-memory.service).
 Monitora i file di conversazione scritti da Brain, rileva nuovi scambi
 completi (user + assistant) e decide cosa salvare nella memoria persistente.
+
+SECURITY-STEP4: usa get_user_memory_dir(get_system_owner_id()) per i path.
 """
 
 import json
@@ -20,6 +22,7 @@ from modules.utils import write_json_atomic
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config import Config
+from modules.auth import get_user_memory_dir, get_system_owner_id
 from modules.memory import Memory
 from modules.episodic_memory import EpisodicMemory
 
@@ -30,8 +33,9 @@ logging.basicConfig(
 log = logging.getLogger("cipher.memory")
 
 POLL_INTERVAL       = 8    # secondi tra un controllo e l'altro
-STATE_FILE          = Config.MEMORY_DIR / "memory_worker_state.json"
-CONV_DIR            = Config.MEMORY_DIR / "conversations"
+_MEM_DIR            = get_user_memory_dir(get_system_owner_id())
+STATE_FILE          = _MEM_DIR / "memory_worker_state.json"
+CONV_DIR            = _MEM_DIR / "conversations"
 # Numero minimo di messaggi in una sessione per generare un riassunto
 SUMMARY_MIN_MSGS    = 10
 
@@ -80,10 +84,7 @@ def _load_state() -> dict:
 
 
 def _save_state(state: dict) -> None:
-    STATE_FILE.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    write_json_atomic(STATE_FILE, state, permissions=0o600)
 
 
 def _call_llm(client: OpenAI, prompt: str) -> str:
@@ -249,7 +250,7 @@ def _check_conversations(
                 summary = _summarize_session(past_data, client)
                 if summary:
                     past_data["summary"] = summary
-                    write_json_atomic(past_file, past_data)
+                    write_json_atomic(past_file, past_data, permissions=0o600)
                     log.info("Sessione riassunta: %s (%d parole)", past_file.name, len(summary.split()))
             except Exception as e:
                 log.warning("Errore summarizzazione %s: %s", past_file.name, e)
@@ -264,8 +265,9 @@ def main() -> None:
         api_key=Config.OPENROUTER_API_KEY,
         base_url=Config.OPENROUTER_BASE_URL,
     )
-    memory   = Memory()
-    episodic = EpisodicMemory()
+    _owner   = get_system_owner_id()
+    memory   = Memory(user_id=_owner)
+    episodic = EpisodicMemory(mem_dir=_MEM_DIR)
     state    = _load_state()
 
     while True:
