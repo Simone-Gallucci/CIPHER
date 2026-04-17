@@ -860,7 +860,7 @@ class Brain:
     #  Web search                                                          #
     # ------------------------------------------------------------------ #
 
-    def _web_search(self, query: str, max_results: int = 4) -> str:
+    def _web_search(self, query: str, max_results: int = 4) -> list[dict]:
         return self._web_search_fn(query, max_results=max_results)
 
     # ------------------------------------------------------------------ #

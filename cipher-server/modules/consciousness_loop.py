@@ -1328,21 +1328,15 @@ Genera 2-3 idee concrete. Scrivi come un messaggio naturale — non una lista te
         if not query or not self._brain:
             return {"success": False, "error": "Query mancante."}
 
-        result = self._brain._web_search(query, max_results=3)
+        results = self._brain._web_search(query, max_results=3)
 
-        # Sanitize + wrap il risultato prima di passarlo ai prompt LLM
-        from modules.prompt_sanitizer import sanitize_memory_field, wrap_untrusted
-        _sanitized, _ = sanitize_memory_field(result, source="web_search")
-        _wrapped = wrap_untrusted(_sanitized, "web_search_result")
-        if _wrapped:
-            _wrapped = _wrapped.replace(
-                "<web_search_result>",
-                f'<web_search_result source="query:{query}">',
-                1,
-            )
-        _result_for_llm = _wrapped or _sanitized  # fallback se empty
+        # Per il prompt LLM (sanitized + wrapped per-snippet)
+        from modules.web_search import format_search_results
+        _result_for_llm = format_search_results(results)
 
-        synthesis = result[:300]
+        # Per la synthesis (testo plain, troncato)
+        plain_text = "\n".join(f"{r['title']}: {r['snippet']}" for r in results)
+        synthesis = plain_text[:300]
 
         if self._brain:
             try:

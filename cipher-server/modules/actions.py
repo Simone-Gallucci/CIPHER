@@ -597,18 +597,11 @@ except Exception as e:
             # ── Web ───────────────────────────────────────────────────
             if action == "web_search":
                 query = params.get("query", "")
-                raw = self._web_search(query)
-                from modules.prompt_sanitizer import sanitize_memory_field, wrap_untrusted
-                sanitized, _ = sanitize_memory_field(raw, source="web_search")
-                wrapped = wrap_untrusted(sanitized, "web_search_result")
-                if wrapped:
-                    # Aggiunge attributo source con la query eseguita
-                    wrapped = wrapped.replace(
-                        "<web_search_result>",
-                        f'<web_search_result source="query:{query}">',
-                        1,
-                    )
-                return wrapped or sanitized
+                results = self._web_search(query)
+                if not results:
+                    return "Nessun risultato trovato."
+                from modules.web_search import format_search_results
+                return format_search_results(results)
 
             elif action == "web_fetch":
                 return self._web_fetch(
